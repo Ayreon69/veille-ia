@@ -377,6 +377,85 @@ def charger_semaines(limite: int = SEMAINES_AFFICHEES) -> list[dict]:
     return semaines
 
 
+# Une puce de digest ressemble à :
+#   - **Titre réécrit** — une phrase en français. [lien](https://…)
+# Le tiret peut être un vrai tiret cadratin ou deux-points, et le lien final est
+# toujours de la forme [lien](url) : c'est lui qui rattache la phrase à son élément.
+_PUCE = re.compile(r"^\s*[-*]\s+(?P<texte>.+?)\s*\[[^\]]*\]\((?P<url>https?://[^)\s]+)\)\s*$")
+_TITRE_GRAS = re.compile(r"^\*\*(?P<titre>[^*]+)\*\*\s*(?:[—:–-]\s*)?")
+
+
+def _sans_markdown(texte: str) -> str:
+    """Rend une puce de digest en texte simple, pour une ligne de liste."""
+    texte = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", texte)   # liens restants
+    texte = re.sub(r"\*\*([^*]+)\*\*", r"\1", texte)          # gras
+    texte = re.sub(r"`([^`]+)`", r"\1", texte)                 # code
+    return re.sub(r"\s+", " ", texte).strip()
+
+
+def _section_a_retenir(corps: str) -> tuple[str, str]:
+    """Sépare la synthèse du jour du détail section par section.
+
+    « À retenir » est le seul passage transversal du digest : quatre puces sans lien,
+    qui ne répètent aucun élément en particulier. Tout le reste est un résumé
+    élément par élément, désormais lisible dans la liste elle-même.
+
+    Returns:
+        (la section « À retenir » sans son titre, le reste du digest).
+    """
+    lignes = corps.splitlines()
+    debuts = [k for k, ligne in enumerate(lignes) if ligne.startswith("## ")]
+    if not debuts or "retenir" not in lignes[debuts[0]].lower():
+        return "", corps
+
+    fin = debuts[1] if len(debuts) > 1 else len(lignes)
+    return "\n".join(lignes[debuts[0] + 1:fin]).strip(), "\n".join(lignes[fin:]).strip()
+
+
+def phrases_du_digest(corps: str) -> dict[str, str]:
+    """Rattache chaque phrase du digest à l'URL dont elle parle.
+
+    Le digest du jour est déjà écrit en français, une phrase par élément, et il
+    portait cette valeur tout seul en haut de page : dans la liste, on lisait
+    l'extrait brut du site source — souvent en anglais, souvent coupé au milieu
+    d'un mot. Rien de nouveau n'est demandé au modèle ici, on cesse simplement de
+    jeter ce qu'il a déjà écrit.
+
+    La section « À retenir » ne porte aucun lien : ses puces sont des synthèses
+    transversales, pas des résumés d'éléments. Elles sont donc ignorées, sans
+    traitement particulier — sans lien, aucune puce ne s'apparie.
+    """
+    phrases: dict[str, str] = {}
+    for puce in _puces(corps):
+        trouve = _PUCE.match(puce)
+        if not trouve:
+            continue
+        texte = _TITRE_GRAS.sub("", trouve.group("texte").strip())
+        texte = _sans_markdown(texte)
+        if len(texte) >= 40:      # une phrase, pas un fragment de titre
+            phrases[trouve.group("url")] = texte
+    return phrases
+
+
+def _puces(corps: str) -> list[str]:
+    """Découpe le digest en puces, une par élément, lignes de suite recollées.
+
+    Le modèle écrit d'ordinaire une puce sur une seule ligne, mais rien ne le lui
+    impose et le markdown admet les lignes de suite indentées. Les traiter ligne à
+    ligne ferait perdre en silence toute puce repliée — et avec elle, la phrase
+    française de l'élément.
+    """
+    puces: list[str] = []
+    for ligne in corps.splitlines():
+        if re.match(r"^\s*[-*]\s+", ligne):
+            puces.append(ligne.strip())
+        elif puces and ligne.startswith((" ", "\t")) and ligne.strip():
+            puces[-1] += " " + ligne.strip()
+        elif not ligne.strip() or ligne.startswith("#"):
+            puces.append("")        # coupe la suite : une puce ne franchit pas un titre
+    return puces
+
+
 @lru_cache(maxsize=1)
 def _sources_de_versions() -> frozenset[str]:
     """Les sources qui publient des versions, repérées à leur flux.
@@ -413,6 +492,12 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
     total = 0
 
     for jour in jours:
+        # Les digests d'une même journée se complètent : celui du soir reprend la
+        # matinée. Le plus récent l'emporte donc sur le plus ancien.
+        phrases: dict[str, str] = {}
+        for d in jour.get("digests", []):
+            phrases.update(phrases_du_digest(d.get("corps", "")))
+
         items = []
         for it in jour.get("items", []):
             if not it.get("url"):
@@ -423,6 +508,7 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
             it["prioritaire"] = _prioritaire(it)
             it["voie"] = config.voie(it.get("score"))
             it["version"] = it.get("source_id") in _sources_de_versions()
+            it["phrase"] = phrases.get(it.get("url", ""), "")
             items.append(it)
 
         # Claude reste en tête quoi qu'il arrive, avant même le score : c'est la
@@ -438,8 +524,16 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
             reverse=True,
         )
 
+        # « À retenir » d'un côté, le détail de l'autre. Depuis que chaque élément
+        # porte sa phrase dans la liste, les sections thématiques du digest répètent
+        # mot pour mot ce qui se lit trente lignes plus bas. Le point du jour reste
+        # donc ouvert, et le détail se replie.
         digests = [
-            {"heure": d.get("heure", ""), "html": markdown_html(d.get("corps", ""))}
+            {
+                "heure": d.get("heure", ""),
+                "retenir": markdown_html(_section_a_retenir(d["corps"])[0]),
+                "html": markdown_html(_section_a_retenir(d["corps"])[1]),
+            }
             for d in jour.get("digests", [])
             if d.get("corps")
         ]

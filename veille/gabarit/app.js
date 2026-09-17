@@ -205,7 +205,7 @@
   // Déclaré ici, avec la portée, plutôt qu'à côté de `sujetOk` : les compteurs des
   // filtres s'en servent, et ils sont calculés dès l'initialisation.
   const texteOk = i =>
-    !requete || [i.titre, i.source_nom, i.extrait, i.analyse, i.justification]
+    !requete || [i.titre, i.source_nom, i.extrait, i.phrase, i.analyse, i.justification]
       .join(' ').toLowerCase().includes(requete);
 
   const tous = D.jours.flatMap(j => j.items);
@@ -450,8 +450,14 @@
       + (i.categorie && !estSignet(i) ? `<span class="cat">${echapper(LIBELLES[i.categorie] || i.categorie)}</span>` : '')
       // Inutile dans l'onglet signets : tout y est un tweet, la mention n'informe plus.
       + (i.titre_utilisateur && !estSignet(i) ? `<span class="avis" title="Titre rédigé par un utilisateur : affirmation, pas fait vérifié">titre d'utilisateur</span>` : '')
+      // Une phrase du digest n'est pas un extrait : l'une est écrite par le modèle,
+      // l'autre est le texte du site source. Les afficher pareil sans le dire serait
+      // faire passer l'un pour l'autre — d'où le marqueur, discret mais présent.
+      + (i.phrase ? `<span class="avis" title="Phrase du digest du jour, écrite par le modèle — et non le texte du site source">résumé</span>` : '')
       + `</div>`
-      + (i.extrait ? `<p class="extrait">${echapper(i.extrait)}</p>` : '')
+      + (i.phrase || i.extrait
+        ? `<p class="extrait">${echapper(i.phrase || i.extrait)}</p>`
+        : '')
       + `</div></a>`;
   }
 
@@ -754,9 +760,19 @@
       visibles += items.length;
       // Le digest rédigé porte sur la veille : il n'a rien à faire dans les signets.
       const digests = (vue === 'veille' && filtre === 'tout' && !requete)
-        ? j.digests.map(d => `<details class="digest"${j === portee[0] ? ' open' : ''}>`
-            + `<summary>Digest${d.heure ? ' de ' + d.heure : ''}</summary>`
-            + `<div class="corps">${d.html}</div></details>`).join('')
+        // Le point du jour se lit d'emblée ; le détail, qui répète élément par élément
+        // ce que la liste dit maintenant elle-même, se replie.
+        ? j.digests.map(d =>
+            `<div class="digest">`
+            // Un seul élément de flex, sinon l'heure passe à la ligne sous le titre :
+            // le filet pointillé qui suit prend toute la place restante.
+            + `<p class="chapitre"><span><b>Le point</b>${d.heure ? ' de ' + echapper(d.heure) : ''}</span></p>`
+            + (d.retenir ? `<div class="corps retenir">${d.retenir}</div>` : '')
+            + (d.html
+              ? `<details class="detail-jour"><summary>Le détail, section par section</summary>`
+                + `<div class="corps">${d.html}</div></details>`
+              : '')
+            + `</div>`).join('')
         : '';
       return `<section class="jour"><h2>${echapper(j.libelle)}`
         + `<span class="n">${items.length}</span></h2>${digests}`
