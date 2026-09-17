@@ -12,12 +12,19 @@ Fraunces et Plex Mono n'ont que le `latin` : la titraille est une date en franç
 le mono ne porte que des chiffres et des étiquettes. Le `latin-ext` de Fraunces pesait
 59 Ko de caractères qui n'y paraîtront jamais.
 
-Elles sont encodées en base64 et injectées dans la page par `veille/site.py`
-(`polices()`), et non chargées depuis Google Fonts. Trois raisons :
+Elles sont injectées par `veille/site.py` (`polices()`), et jamais chargées depuis
+Google Fonts. Deux façons, selon la destination :
 
-- la page reste **autonome** — elle s'ouvre par double-clic, hors ligne, comme le
-  promet l'en-tête de `site.py` ;
-- **aucune requête réseau** ajoutée, donc aucun clignotement de police au chargement ;
+- le **fichier local** les embarque en base64 — c'est ce qui lui permet de s'ouvrir
+  par double-clic, hors ligne, sans rien demander à personne ;
+- le **site publié** les sert en fichiers voisins, depuis son propre domaine. La page
+  est reconstruite tous les matins : 233 Ko de base64 repartaient à chaque visite,
+  alors que des fichiers se revalident sans se retélécharger.
+
+Trois raisons communes aux deux :
+
+- **aucune requête vers un tiers**, donc aucune adresse IP de lecteur communiquée ;
+- **aucun clignotement de police** au chargement ;
 - le **site public ne trahit pas ses lecteurs** : un `<link>` vers `fonts.googleapis.com`
   enverrait leur adresse IP à Google, ce que la note *Site public* affirme ne pas faire.
 

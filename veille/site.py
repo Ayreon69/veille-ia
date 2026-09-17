@@ -706,8 +706,8 @@ _FONTES = (
 )
 
 
-@lru_cache(maxsize=1)
-def polices() -> str:
+@lru_cache(maxsize=2)
+def polices(externe: bool = False) -> str:
     """Renvoie les @font-face, fontes comprises, encodées en base64.
 
     Embarquées et non chargées depuis Google Fonts, pour trois raisons qui tiennent
@@ -718,17 +718,32 @@ def polices() -> str:
 
     Si un fichier manque, sa famille est simplement sautée : la pile de repli reprend
     la main et la page reste parfaitement lisible.
+
+    Args:
+        externe: sur le site publié, les fontes sont servies en fichiers voisins
+            plutôt qu'encodées dans la page. Les 233 Ko de base64 repartaient sinon
+            à chaque visite, la page entière étant reconstruite tous les matins ; en
+            fichiers, le navigateur les revalide sans les retélécharger. Elles
+            restent servies par le même domaine : aucune requête ne part ailleurs, et
+            la promesse faite aux lecteurs tient. Le fichier local garde son base64,
+            c'est ce qui lui permet de s'ouvrir hors ligne.
     """
     blocs = []
     for nom, famille, graisse, plage in _FONTES:
         fichier = DOSSIER_ASSETS / nom
         if not fichier.exists():
             continue
-        b64 = base64.b64encode(fichier.read_bytes()).decode("ascii")
+        source = (
+            f"url(polices/{nom})"
+            if externe
+            else "url(data:font/woff2;base64,"
+            + base64.b64encode(fichier.read_bytes()).decode("ascii")
+            + ")"
+        )
         blocs.append(
             f"@font-face{{font-family:'{famille}';font-style:normal;"
             f"font-weight:{graisse};font-display:swap;"
-            f"src:url(data:font/woff2;base64,{b64}) format('woff2');"
+            f"src:{source} format('woff2');"
             f"unicode-range:{plage}}}"
         )
     return "\n".join(blocs)
@@ -754,7 +769,7 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
     provisoire = index.with_suffix(".html.tmp")
     page = (
         gabarit()
-        .replace("__POLICES__", polices())
+        .replace("__POLICES__", polices(externe=public))
         .replace("__URL__", config.URL_PUBLIQUE)
         .replace("__DONNEES__", charge)
     )
@@ -775,6 +790,15 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
 
         # L'image de partage voyage avec la page : elle est la seule ressource que
         # les robots d'aperçu iront chercher, et ils exigent une URL absolue.
+        # Les fontes sont servies en fichiers voisins plutôt qu'encodées dans la
+        # page : voir polices(). Même domaine, donc aucune requête vers un tiers.
+        dossier_polices = dossier / "polices"
+        dossier_polices.mkdir(exist_ok=True)
+        for nom, *_ in _FONTES:
+            fonte = DOSSIER_ASSETS / nom
+            if fonte.exists():
+                (dossier_polices / nom).write_bytes(fonte.read_bytes())
+
         image = DOSSIER_ASSETS / "partage.png"
         if image.exists():
             (dossier / "partage.png").write_bytes(image.read_bytes())
