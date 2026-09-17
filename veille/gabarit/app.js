@@ -15,6 +15,47 @@
     localStorage.setItem(CLE, JSON.stringify([...lus].slice(-4000)));
   };
 
+  // ---- reprise de lecture ----
+  // La première question du lecteur quotidien est « qu'est-ce que j'ai raté ? ». La
+  // page ne pouvait pas y répondre : elle ouvrait sur le jour même, sans savoir si on
+  // l'avait déjà lu. Elle retient donc la date de la visite précédente — dans le
+  // navigateur du lecteur, rien n'est envoyé nulle part.
+  //
+  // Deux stockages, et c'est nécessaire : localStorage retient la date de la dernière
+  // visite d'un jour à l'autre, sessionStorage fige le repère le temps de l'onglet.
+  // Sans le second, recharger la page effacerait le bandeau qu'on est en train de
+  // lire — la visite précédente serait devenue « il y a dix secondes ».
+  const CLE_VISITE = 'veille-derniere-visite';
+  const CLE_REPERE = 'veille-repere-visite';
+  let repere = null;
+  try {
+    repere = sessionStorage.getItem(CLE_REPERE);
+    if (repere === null) {
+      repere = localStorage.getItem(CLE_VISITE) || '';
+      sessionStorage.setItem(CLE_REPERE, repere);
+    }
+    localStorage.setItem(CLE_VISITE, new Date().toISOString());
+  } catch (e) {
+    repere = repere || '';   // navigation privée, stockage refusé : pas de bandeau
+  }
+  const seuilVisite = repere ? Date.parse(repere) : NaN;
+
+  // À la toute première visite, tout est nouveau : le dire n'apprendrait rien, et
+  // marquer quarante items « nouveau » ne distinguerait plus rien du tout.
+  const estNouveau = i => {
+    if (isNaN(seuilVisite)) return false;
+    const t = Date.parse(i.date);
+    return !isNaN(t) && t > seuilVisite;
+  };
+
+  const depuis = ms => {
+    const h = Math.floor(ms / 3600000);
+    if (h < 1) return "il y a moins d'une heure";
+    if (h < 24) return `il y a ${h} heure${h > 1 ? 's' : ''}`;
+    const j = Math.round(h / 24);
+    return j <= 1 ? 'hier' : `il y a ${j} jours`;
+  };
+
   // ---- favoris ----
   // L'item est stocké EN ENTIER, pas par son URL : la page n'affiche que 90 jours, et
   // un favori doit rester consultable une fois sa journée sortie de la fenêtre. Il est
@@ -326,6 +367,7 @@
       + ` data-url="${echapper(i.url)}"><summary>`
       + `<span class="t">${echapper(i.titre)}</span>`
       + `<span class="ligne"><span class="src">${echapper(i.source_nom)}</span>`
+      + (estNouveau(i) ? `<span class="neuf">nouveau</span>` : '')
       + (q ? `<span>${q}</span>` : '')
       + (i.verdict ? `<span class="verdict ${RANG[i.verdict] || 'v-moyen'}">${echapper(i.verdict)}</span>` : '')
       + (i.score != null ? `<span class="score ${i.voie}" title="Intérêt estimé pour ton profil (0 à 1)">${i.score.toFixed(2)}</span>` : '')
@@ -346,18 +388,28 @@
       + `${marque ? '★' : '☆'}</button>`;
   }
 
-  function boutonPlus(i){
+  // Le bouton était un « + » de 19 px dans le coin de la carte, à 30 % d'opacité
+  // tant qu'on ne survolait pas. Il fait pourtant la chose la plus intéressante du
+  // site — un résumé complet et un exemple d'usage — et personne ne pouvait le
+  // deviner. Il porte désormais son nom, en toutes lettres, sous la carte.
+  const LIBELLE_DEV = {
+    pret: 'Développer',
+    fait: 'Voir le développement',
+    ouvert: 'Replier',
+  };
+
+  function boutonDev(i){
     const fait = !!dev[i.url];
-    return `<button class="plus" data-url="${echapper(i.url)}" data-fait="${fait}"`
-      + ` aria-expanded="false" aria-label="Développer"`
-      + ` title="${fait ? 'Voir le développement' : "Développer : résumé complet et exemple d'usage"}">`
-      + `+</button>`;
+    return `<button class="developper" data-url="${echapper(i.url)}" data-fait="${fait}"`
+      + ` aria-expanded="false"`
+      + ` title="Résumé complet en français, et un exemple d'usage concret">`
+      + `${fait ? LIBELLE_DEV.fait : LIBELLE_DEV.pret}</button>`;
   }
 
   function carte(i){
     return `<div class="enveloppe">`
       + ((estSignet(i) && i.analyse) ? carteSignet(i) : carteLien(i))
-      + boutonPlus(i) + (PUBLIC ? '' : etoile(i))
+      + `<div class="actions">${boutonDev(i)}${PUBLIC ? '' : etoile(i)}</div>`
       + `<div class="developpement" hidden></div></div>`;
   }
 
@@ -367,6 +419,7 @@
       + ` href="${echapper(i.url)}" target="_blank" rel="noopener" data-url="${echapper(i.url)}">`
       + `<h3>${echapper(i.titre)}</h3>`
       + `<div class="ligne"><span class="src">${echapper(i.source_nom)}</span>`
+      + (estNouveau(i) ? `<span class="neuf">nouveau</span>` : '')
       + (h ? `<span>${h}</span>` : '')
       + (i.categorie && !estSignet(i) ? `<span class="cat">${echapper(LIBELLES[i.categorie] || i.categorie)}</span>` : '')
       // Inutile dans l'onglet signets : tout y est un tweet, la mention n'informe plus.
@@ -773,7 +826,7 @@
     boutonCle.textContent = posee ? 'Clé ✓' : 'Clé API';
     panneauCle.innerHTML = `<div class="boite">`
       + `<h2>Développer un article avec votre clé</h2>`
-      + `<p>Le bouton <b>+</b> de chaque carte demande à Gemini un résumé complet de `
+      + `<p>Le bouton <b>Développer</b> de chaque carte demande à Gemini un résumé complet de `
       + `l'article et un exemple d'usage. L'appel part <b>de votre navigateur</b>, avec `
       + `votre clé : elle est enregistrée ici seulement, elle n'est envoyée à aucun `
       + `serveur de ce site, et l'auteur du site ne la voit jamais.</p>`
@@ -825,9 +878,19 @@
   async function developperAvecCle(url, panneau){
     const cle = laCle();
     if (!cle) {
-      panneau.innerHTML = `<p class="attente">Il faut d'abord renseigner une clé Gemini `
-        + `— bouton <b>Clé API</b> en haut de la page. Elle reste dans ce navigateur.</p>`;
-      panneauCle.hidden = false;
+      // Renvoyer vers un panneau situé en haut de page, à trois écrans de là, c'était
+      // faire chercher au lecteur ce qu'on venait de lui refuser. Le champ vient à lui,
+      // et l'enregistrement relance le développement dans la foulée.
+      panneau.innerHTML = `<p class="attente">Ce bouton demande à Gemini un <b>résumé `
+        + `complet en français</b> et un <b>exemple d'usage concret</b>. L'appel part de `
+        + `votre navigateur avec votre propre clé : elle reste ici, ce site n'a aucun `
+        + `serveur à qui l'envoyer.</p>`
+        + `<div class="rang"><input class="cle-ici" type="password" autocomplete="off"`
+        + ` spellcheck="false" placeholder="AIza…" aria-label="Clé Gemini">`
+        + `<button class="principal poser-ici" data-url="${echapper(url)}">Enregistrer et développer</button></div>`
+        + `<p class="note">Clé gratuite sur <a href="https://aistudio.google.com/apikey"`
+        + ` target="_blank" rel="noopener">aistudio.google.com/apikey</a>, décomptée de `
+        + `votre quota. Rien d'autre n'est conservé.</p>`;
       return;
     }
 
@@ -894,8 +957,8 @@
   }
 
   const marquerFait = url =>
-    document.querySelectorAll(`.plus[data-url="${CSS.escape(url)}"]`)
-      .forEach(b => { b.dataset.fait = 'true'; b.title = 'Voir le développement'; });
+    document.querySelectorAll(`.developper[data-url="${CSS.escape(url)}"]`)
+      .forEach(b => { b.dataset.fait = 'true'; });
 
   async function developper(bouton, refaire){
     const url = bouton.dataset.url;
@@ -907,13 +970,13 @@
     if (!refaire && bouton.getAttribute('aria-expanded') === 'true' && dev[url]) {
       panneau.hidden = true;
       bouton.setAttribute('aria-expanded', 'false');
-      bouton.textContent = '+';
+      bouton.textContent = LIBELLE_DEV.fait;
       return;
     }
 
     panneau.hidden = false;
     bouton.setAttribute('aria-expanded', 'true');
-    bouton.textContent = '\u2212';
+    bouton.textContent = LIBELLE_DEV.ouvert;
 
     if (dev[url] && !refaire) { panneau.innerHTML = rendu(url); return; }
     if (PUBLIC) return developperAvecCle(url, panneau);
@@ -973,12 +1036,23 @@
   flux.addEventListener('click', e => {
     const bouton = e.target.closest('.etoile');
     if (bouton) { e.preventDefault(); basculer(bouton.dataset.url); return; }
-    const plus = e.target.closest('.plus');
+    const plus = e.target.closest('.developper');
     if (plus) { e.preventDefault(); developper(plus, false); return; }
+    const poser = e.target.closest('.poser-ici');
+    if (poser) {
+      e.preventDefault();
+      const champCle = poser.closest('.rang').querySelector('.cle-ici');
+      const valeur = champCle.value.trim();
+      if (!valeur) return champCle.focus();
+      try { localStorage.setItem(CLE_GEMINI, valeur); } catch (err) {}
+      rendrePanneauCle();
+      developper(poser.closest('.enveloppe').querySelector('.developper'), true);
+      return;
+    }
     const refaire = e.target.closest('.refaire');
     if (refaire) {
       e.preventDefault();
-      developper(refaire.closest('.enveloppe').querySelector('.plus'), true);
+      developper(refaire.closest('.enveloppe').querySelector('.developper'), true);
       return;
     }
     const carte = e.target.closest('.item');
@@ -1019,6 +1093,40 @@
     boutonSauver.hidden = true;
     if (listeFavoris().length || Object.keys(retires).length) versLeVault();
   }
+
+  // ---- bandeau de reprise ----
+  // Il ne dépend ni de la voie ni du jour affiché : il parle de toute l'archive, et
+  // ne bouge pas pendant la visite. Il est donc rendu une fois, au démarrage.
+  function rendreReprise(){
+    const bloc = document.getElementById('reprise');
+    if (isNaN(seuilVisite)) return;                    // première visite
+
+    const neufs = D.jours.flatMap(j => j.items).filter(i => !estSignet(i) && estNouveau(i));
+    if (!neufs.length) return;
+
+    const essentiels = neufs.filter(i => i.voie === 'essentiel').length;
+    // Le plus ancien jour qui porte du neuf, et non le plus récent : on reprend là
+    // où on s'est arrêté, sans laisser un trou derrière soi. D.jours va du plus
+    // récent au plus ancien, d'où le dernier de la liste et non le premier.
+    const avecNeuf = D.jours.filter(j => j.items.some(i => !estSignet(i) && estNouveau(i)));
+    const jour = avecNeuf[avecNeuf.length - 1];
+    bloc.innerHTML =
+      `<span><b>${neufs.length} nouveauté${neufs.length > 1 ? 's' : ''}</b> `
+      + `depuis votre dernière visite, ${depuis(Date.now() - seuilVisite)}`
+      + (essentiels ? ` — dont ${essentiels} essentielle${essentiels > 1 ? 's' : ''}` : '')
+      + `.</span>`
+      + `<button id="reprendre" data-date="${jour ? jour.date : ''}">Reprendre ↓</button>`;
+    bloc.hidden = false;
+  }
+
+  rendreReprise();
+
+  document.getElementById('reprise').addEventListener('click', e => {
+    if (!e.target.closest('#reprendre')) return;
+    const date = e.target.closest('#reprendre').dataset.date;
+    if (date && PAR_DATE.has(date)) allerA(date);
+    flux.scrollIntoView({block: 'start', behavior: 'smooth'});
+  });
 
   // La barre d'état ne dépend d'aucun filtre : elle dit quand la page a été fabriquée
   // et ce qu'elle contient, une fois pour toutes.

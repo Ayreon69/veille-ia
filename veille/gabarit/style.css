@@ -133,6 +133,26 @@ header{background:var(--fond); border-bottom:1px solid var(--bord)}
   letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
 }
 .compteurs b{color:var(--texte); font-weight:500; font-variant-numeric:tabular-nums}
+/* ---- bandeau de reprise ----
+   Il répond à la première question du lecteur quotidien — « qu'est-ce que j'ai
+   raté ? » — et disparaît dès qu'il n'a plus rien à dire : pas de bandeau vide, pas
+   de « 0 nouveauté ». Le filet d'accent à gauche est la seule couleur qu'il porte. */
+.reprise{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  margin:16px 0 0; padding:11px 14px;
+  background:var(--fond-doux); border-left:2px solid var(--accent);
+  font-size:var(--t-3); line-height:1.5;
+}
+.reprise[hidden]{display:none}
+.reprise b{color:var(--accent)}
+.reprise button{
+  margin-left:auto; min-height:36px; padding:0 12px; cursor:pointer;
+  font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase;
+  background:none; color:var(--texte); border:1px solid var(--bord-fort); border-radius:3px;
+}
+.reprise button:hover{border-color:var(--accent); color:var(--accent)}
+
 /* Les onglets ont quitté le corps de l'en-tête pour la barre d'état : ils changent de
    vue, pas de journée, et n'ont rien à faire entre la titraille et les filtres du jour.
    Le groupe en pilule a suivi — dans une barre de 12 px en capitales, un aplat et une
@@ -383,24 +403,60 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
 }
 .corps hr{border:0; border-top:1px solid var(--bord); margin:16px 0}
 
+/* ---- rangée d'actions sous la carte ----
+   Le « + » et l'étoile flottaient en absolu dans le coin, à 30 % d'opacité tant qu'on
+   ne survolait pas : invisibles au premier regard, inatteignables au doigt. Ils
+   descendent dans le flux, sous la carte, et le premier porte son nom. */
+.actions{display:flex; align-items:center; gap:6px; margin:-2px 0 8px 14px}
+.developper{
+  min-height:32px; padding:0 11px; cursor:pointer;
+  font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase;
+  background:none; color:var(--texte-doux);
+  border:1px solid var(--bord); border-radius:3px;
+}
+.developper:hover{border-color:var(--accent); color:var(--accent)}
+/* Un développement déjà écrit ne coûte rien à rouvrir : le bouton le dit en portant
+   l'accent, au lieu de laisser croire qu'on va relancer le modèle. */
+.developper[data-fait="true"]{color:var(--accent); border-color:var(--accent-doux)}
+.developper[aria-expanded="true"]{color:var(--accent); border-color:var(--accent)}
+
+/* Le champ de clé posé dans le panneau de développement : mêmes règles que celui du
+   panneau du haut, dont il reprend la classe .rang. */
+.developpement .rang{display:flex; gap:8px; margin:10px 0; flex-wrap:wrap}
+.developpement .rang input{
+  flex:1; min-width:200px; min-height:36px; padding:0 11px; font:inherit; font-size:var(--t-3);
+  background:var(--fond); color:var(--texte); border:1px solid var(--bord); border-radius:3px;
+}
+.developpement .rang input:focus{outline:2px solid var(--accent); outline-offset:-1px}
+.developpement .rang button{
+  min-height:36px; padding:0 14px; font:inherit; font-size:var(--t-3); font-weight:500;
+  cursor:pointer; border-radius:3px; border:1px solid var(--accent);
+  background:var(--accent); color:var(--sur-accent);
+}
+.developpement .note{margin-top:8px; font-size:var(--t-2); color:var(--texte-doux)}
+
+/* Le marqueur des éléments parus depuis la dernière visite. */
+.neuf{
+  padding:1px 6px; border-radius:3px;
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; background:var(--accent-doux); color:var(--accent);
+}
+
 /* L'étoile ne peut pas vivre dans la carte : celle-ci est un <a>, et un bouton
    imbriqué dans un lien est du HTML invalide, inatteignable au clavier. Elle est donc
    posée à côté, dans une enveloppe positionnée — d'où le déplacement au survol qui
    passe de la carte à l'enveloppe, pour que les deux bougent ensemble. */
 .enveloppe{position:relative; transition:transform .12s}
 .enveloppe:hover{transform:translateX(2px)}
-.etoile, .plus{
-  position:absolute; top:7px; right:7px; z-index:1;
-  width:28px; height:28px; padding:0; line-height:1; font-size:16px; cursor:pointer;
-  background:none; border:0; border-radius:6px; color:var(--texte-doux);
-  opacity:.3; transition:opacity .12s, color .12s, background .12s;
+.etoile{
+  width:32px; height:32px; padding:0; line-height:1; font-size:16px; cursor:pointer;
+  background:none; color:var(--texte-doux);
+  border:1px solid transparent; border-radius:3px;
+  transition:color .12s, border-color .12s;
 }
-/* Le bouton « développer » partage tout avec l'étoile, sauf sa position. */
-.plus{right:35px; font-size:19px; font-weight:300}
-.plus[data-fait="true"]{opacity:1; color:var(--accent)}
-.enveloppe:hover .etoile, .enveloppe:hover .plus{opacity:.75}
-.etoile:hover, .plus:hover{background:var(--fond-doux); color:var(--accent); opacity:1}
-.etoile:focus-visible, .plus:focus-visible{outline:2px solid var(--accent); opacity:1}
+.etoile:hover{border-color:var(--bord); color:var(--accent)}
+.etoile:focus-visible, .developper:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
 /* Une fois en favori, l'étoile reste pleine et visible sans survol : c'est elle qui
    signale, dans le flux du jour, ce que j'ai déjà mis de côté. */
 .etoile[aria-pressed="true"]{opacity:1; color:var(--accent)}
@@ -419,7 +475,7 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
 }
 .score.essentiel{background:var(--accent); color:var(--sur-accent); font-weight:600}
 .score.bruit{opacity:.5}
-.item h3{font-size:var(--t-4); font-weight:500; margin:0 0 5px; line-height:1.4; padding-right:52px}
+.item h3{font-size:var(--t-4); font-weight:500; margin:0 0 5px; line-height:1.4}
 .ligne{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:var(--t-2); color:var(--texte-doux)}
 .src{font-weight:500; color:var(--accent)}
 .item.lu .src{color:var(--texte-doux)}
@@ -447,7 +503,7 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
 }
 .signet[open] > summary::before{transform:rotate(90deg)}
 .signet > summary:hover .t{color:var(--accent)}
-.signet .t{display:block; font-size:var(--t-4); font-weight:500; line-height:1.4; margin-bottom:5px; padding-right:52px}
+.signet .t{display:block; font-size:var(--t-4); font-weight:500; line-height:1.4; margin-bottom:5px}
 .deplie{padding:2px 14px 14px 32px}
 .analyse{margin:8px 0 0; font-size:var(--t-3); line-height:1.55}
 .pourtoi{
