@@ -1,0 +1,15 @@
+# Environnements et caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets : la clé du modèle vient de .env en local, d'un secret en CI
+.env
+
+# Données et pages générées — ce dépôt ne contient que du code (voir README)
+data/
+state/
+site/
+site-public/

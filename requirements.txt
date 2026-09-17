@@ -1,0 +1,12 @@
+feedparser
+PyYAML
+httpx
+beautifulsoup4
+lxml
+Jinja2
+python-dotenv
+tzdata  # base de fuseaux horaires : absente de Windows, où zoneinfo
+        # échoue sinon sur Europe/Paris (config.FUSEAU)
+
+# Le backend "gemini" (par défaut) n'ajoute aucune dépendance : REST direct via httpx.
+# Le backend "api" (Anthropic) nécessite en plus : pip install anthropic

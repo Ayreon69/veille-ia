@@ -1,0 +1,338 @@
+# Mesuré sur les 19 premiers jours d'archive (07/08 → 22/08/2026), scores du modèle
+# à l'appui. Les sept sources désactivées représentaient 26 % du volume collecté pour
+# 5 % des éléments jugés utiles. Le critère est le RENDEMENT, jamais le volume : des
+# sources qui ne publient que deux fois par mois sont conservées quand ce qu'elles
+# publient est bon — Anthropic News, Mistral AI, les deux flux MCP.
+#
+# `actif: false` conserve la configuration : une seule ligne suffit à revenir dessus.
+
+# Sources de la veille IA
+# Vérifiées le 2026-08-07 (code HTTP + présence d'items + date du dernier post).
+# La note de référence est "Veille IA/Sources.md" dans le vault Obsidian.
+#
+# type    : rss | scrape_anthropic | scrape_the_batch | hn
+# poids   : 3 = fort signal (prioritaire au tri), 2 = utile, 1 = complément bruyant
+# actif   : passer à false pour désactiver sans supprimer la config
+
+- id: anthropic
+  nom: Anthropic News
+  type: scrape_anthropic
+  url: https://www.anthropic.com/news
+  categorie: labs
+  poids: 3
+  actif: true
+
+# Distinct d'anthropic.com/news, qui ne porte que le corporate. C'est ICI que
+# paraissent les annonces produit et Claude Code — priorité n°1 du profil.
+- id: claude_blog
+  nom: Claude Blog (produit)
+  type: scrape_claude_blog
+  url: https://claude.com/blog
+  categorie: labs
+  poids: 3
+  actif: true
+
+# La documentation n'a pas de flux. Le sitemap sert à repérer les pages
+# nouvellement publiées : la déduplication garantit qu'une page ne remonte qu'une
+# fois, donc les retouches de coquilles ne polluent pas le digest.
+- id: claude_code_docs
+  nom: Claude Code (documentation)
+  type: sitemap
+  url: https://code.claude.com/docs/sitemap.xml
+  categorie: outils
+  poids: 3
+  actif: true
+  params:
+    # Sans ce filtre, chaque page remonterait dans une dizaine de traductions.
+    filtre_url: /docs/en/
+
+- id: openai
+  nom: OpenAI News
+  type: rss
+  url: https://openai.com/news/rss.xml
+  categorie: labs
+  poids: 3
+  actif: true
+
+- id: deepmind
+  nom: Google DeepMind
+  type: rss
+  url: https://deepmind.google/blog/feed/basic/
+  categorie: labs
+  poids: 2
+  actif: true
+
+- id: google_ai
+  nom: Google AI
+  type: rss
+  url: https://blog.google/technology/ai/rss/
+  categorie: labs
+  poids: 2
+  # Désactivée le 22/08/2026 — 6 items en 19 jours, 0 utile (0 %).
+  # Communication produit, sans contenu technique exploitable.
+  actif: false
+
+- id: google_research
+  nom: Google Research
+  type: rss
+  url: https://research.google/blog/rss/
+  categorie: labs
+  poids: 2
+  # Désactivée le 22/08/2026 — 5 items en 19 jours, 0 utile (0 %).
+  # Recherche fondamentale, hors du champ agentic coding.
+  actif: false
+
+- id: mistral
+  nom: Mistral AI
+  type: rss
+  url: https://mistral.ai/rss.xml
+  categorie: labs
+  poids: 2
+  actif: true
+
+- id: smol_ainews
+  nom: AI News (smol.ai)
+  type: rss
+  url: https://news.smol.ai/rss.xml
+  categorie: agregateur
+  poids: 3
+  actif: true
+
+- id: hackernews
+  nom: Hacker News
+  type: hn
+  url: https://hn.algolia.com/api/v1/search_by_date
+  categorie: agregateur
+  poids: 2
+  actif: true
+  params:
+    # Une requête Algolia par mot-clé, puis fusion et déduplication.
+    mots_cles: [LLM, "Claude", "Anthropic", "OpenAI", "agentic", "MCP"]
+    # Seuil de score : sous cette barre, c'est du bruit.
+    min_points: 30
+  # Titre rédigé par un utilisateur : affirmation, pas fait vérifié.
+  titre_utilisateur: true
+
+
+- id: reddit_localllama
+  nom: r/LocalLLaMA
+  type: rss
+  url: https://www.reddit.com/r/LocalLLaMA/top/.rss
+  categorie: agregateur
+  poids: 2
+  actif: true
+  # Titre rédigé par un utilisateur : affirmation, pas fait vérifié.
+  titre_utilisateur: true
+
+
+- id: reddit_ml
+  nom: r/MachineLearning
+  type: rss
+  url: https://www.reddit.com/r/MachineLearning/.rss
+  categorie: agregateur
+  poids: 1
+  # Désactivée le 22/08/2026 — 114 items en 19 jours, 10 utiles (9 %).
+  # Flux brut, non trié par votes — contrairement à r/LocalLLaMA qui est sur /top.
+  actif: false
+  # Titre rédigé par un utilisateur : affirmation, pas fait vérifié.
+  titre_utilisateur: true
+
+
+- id: tldr_ai
+  nom: TLDR AI
+  type: rss
+  url: https://tldr.tech/api/rss/ai
+  categorie: agregateur
+  poids: 2
+  actif: true
+
+- id: bens_bites
+  nom: Ben's Bites
+  type: rss
+  url: https://bensbites.com/feed
+  categorie: agregateur
+  poids: 2
+  # Désactivée le 22/08/2026 — 9 items en 19 jours, 0 utile (0 %).
+  # Newsletter grand public, reprend ce que les labos publient déjà.
+  actif: false
+
+- id: the_batch
+  nom: The Batch (Andrew Ng)
+  type: scrape_the_batch
+  url: https://www.deeplearning.ai/the-batch/
+  categorie: agregateur
+  poids: 2
+  # Désactivé : Cloudflare renvoie 403 depuis les IP de datacenter, reproduit sur
+  # deux exécutions GitHub Actions. Fonctionne en revanche depuis une connexion
+  # résidentielle — repasser à true en cas de retour à une exécution locale.
+  # Laissé actif, il ferait apparaître une alerte dans chaque note quotidienne,
+  # ce qui finirait par masquer les vraies pannes.
+  actif: false
+
+- id: simonw
+  nom: Simon Willison
+  type: rss
+  url: https://simonwillison.net/atom/everything/
+  categorie: analyse
+  poids: 3
+  actif: true
+
+- id: latent_space
+  nom: Latent Space
+  type: rss
+  url: https://www.latent.space/feed
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: thezvi
+  nom: The Zvi
+  type: rss
+  # Miroir WordPress : les domaines *.substack.com renvoient 403 depuis les IP de
+  # datacenter, donc depuis GitHub Actions. Ce flux est aussi frais que l'original.
+  url: https://thezvi.wordpress.com/feed/
+  categorie: analyse
+  poids: 2
+  # Désactivée le 22/08/2026 — 10 items en 19 jours, 0 utile (0 %).
+  # Essais longs sur l'alignement et la gouvernance, hors profil.
+  actif: false
+
+- id: interconnects
+  nom: Interconnects (Nathan Lambert)
+  type: rss
+  url: https://www.interconnects.ai/feed
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: raschka
+  nom: Sebastian Raschka
+  type: rss
+  url: https://magazine.sebastianraschka.com/feed
+  categorie: analyse
+  poids: 3
+  actif: true
+
+- id: import_ai
+  nom: Import AI (Jack Clark)
+  type: rss
+  url: https://jack-clark.net/feed/
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: huggingface
+  nom: Hugging Face
+  type: rss
+  url: https://huggingface.co/blog/feed.xml
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: claude_code
+  nom: Claude Code (releases)
+  type: rss
+  url: https://github.com/anthropics/claude-code/releases.atom
+  categorie: outils
+  poids: 3
+  actif: true
+  # Priorité n°1 du profil, et une release compte une vingtaine de puces : on garde
+  # les notes en entier. Tronquer à 400 caractères avait fait manquer l'annonce de
+  # la messagerie inter-sessions, pourtant bien présente dans le changelog.
+  extrait_max: 6000
+
+- id: mcp_servers
+  nom: MCP — serveurs (releases)
+  type: rss
+  url: https://github.com/modelcontextprotocol/servers/releases.atom
+  categorie: outils
+  poids: 2
+  actif: true
+
+- id: mcp_spec
+  nom: MCP — spécification (releases)
+  type: rss
+  url: https://github.com/modelcontextprotocol/modelcontextprotocol/releases.atom
+  categorie: outils
+  poids: 3
+  actif: true
+  extrait_max: 2500
+
+- id: langchain
+  nom: LangChain (releases)
+  type: rss
+  url: https://github.com/langchain-ai/langchain/releases.atom
+  categorie: outils
+  poids: 1
+  actif: true
+
+- id: cursor
+  nom: Cursor (changelog)
+  type: rss
+  url: https://cursor.com/changelog/rss.xml
+  categorie: outils
+  poids: 2
+  actif: true
+  extrait_max: 2500
+
+- id: next_ink
+  nom: Next.ink
+  type: rss
+  url: https://next.ink/feed/
+  categorie: francophone
+  poids: 2
+  # Désactivée le 22/08/2026 — 138 items en 19 jours, 9 utiles (7 %).
+  # Actualité tech française généraliste, très peu sur l'IA appliquée.
+  actif: false
+
+- id: octo
+  nom: OCTO Technology
+  type: rss
+  url: https://blog.octo.com/feed
+  categorie: francophone
+  poids: 2
+  # Désactivée le 22/08/2026 — 5 items en 19 jours, 0 utile (0 %).
+  # Blog de conseil, sujets rarement liés à l'IA.
+  actif: false
+
+- id: actuia
+  nom: ActuIA
+  type: rss
+  url: https://www.actuia.com/feed/
+  categorie: francophone
+  poids: 1
+  actif: true
+
+- id: cafetech
+  nom: Cafétech
+  type: rss
+  # Domaine propre plutôt que *.substack.com, bloqué depuis les IP de datacenter.
+  url: https://cafetech.fr/feed/
+  categorie: francophone
+  poids: 1
+  actif: true
+
+- id: linuxfr
+  nom: LinuxFr
+  type: rss
+  url: https://linuxfr.org/news.atom
+  categorie: francophone
+  poids: 1
+  actif: false
+
+# Vivants mais très bruyants sur l'IA : n'activer qu'avec un filtre mots-clés strict.
+- id: numerama
+  nom: Numerama
+  type: rss
+  url: https://www.numerama.com/feed/
+  categorie: francophone
+  poids: 1
+  actif: false
+
+- id: usine_digitale
+  nom: L'Usine Digitale
+  type: rss
+  url: https://www.usine-digitale.fr/rss/
+  categorie: francophone
+  poids: 1
+  actif: false

@@ -1,0 +1,23 @@
+# Worker de lecture d'articles — voir lecture.js pour ce qu'il fait et ne fait pas.
+#
+# Déploiement :
+#   npm install -g wrangler
+#   wrangler login
+#   wrangler deploy
+#
+# Puis renseigner l'origine réelle du site public dans [vars].SITE ci-dessous, et
+# reporter l'adresse du Worker dans .veille/.env :
+#   VEILLE_WORKER_LECTURE=https://veille-lecture.<compte>.workers.dev
+
+name = "veille-lecture"
+main = "lecture.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+# Origine du site public. Sert de source pour la liste blanche (SITE/urls.json) et
+# d'origine autorisée en CORS. À remplacer par l'adresse réelle après le premier
+# déploiement des pages.
+SITE = "https://veille-ia.pages.dev"
+
+[observability]
+enabled = true
