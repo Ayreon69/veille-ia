@@ -407,9 +407,18 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
    Le « + » et l'étoile flottaient en absolu dans le coin, à 30 % d'opacité tant qu'on
    ne survolait pas : invisibles au premier regard, inatteignables au doigt. Ils
    descendent dans le flux, sous la carte, et le premier porte son nom. */
-.actions{display:flex; align-items:center; gap:6px; margin:-2px 0 8px 14px}
-.developper{
+.actions{display:flex; align-items:center; gap:4px; margin:0 0 12px calc(3rem + 18px)}
+.lien-ancre{
   min-height:32px; padding:0 11px; cursor:pointer;
+  font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase;
+  background:none; color:var(--texte-doux);
+  border:1px solid transparent; border-radius:3px;
+}
+.lien-ancre:hover{border-color:var(--bord); color:var(--accent)}
+.lien-ancre:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.developper{
+  min-height:30px; padding:0 10px; cursor:pointer;
   font-family:var(--mono); font-size:var(--t-1);
   letter-spacing:var(--suivi-mono); text-transform:uppercase;
   background:none; color:var(--texte-doux);
@@ -447,8 +456,9 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
    imbriqué dans un lien est du HTML invalide, inatteignable au clavier. Elle est donc
    posée à côté, dans une enveloppe positionnée — d'où le déplacement au survol qui
    passe de la carte à l'enveloppe, pour que les deux bougent ensemble. */
-.enveloppe{position:relative; transition:transform .12s}
-.enveloppe:hover{transform:translateX(2px)}
+/* Le filet appartient à l'enveloppe, pas à la carte : l'élément et sa rangée
+   d'actions forment un seul bloc, et le trait tombe sous les deux. */
+.enveloppe{position:relative; border-bottom:1px solid var(--bord)}
 .etoile{
   width:32px; height:32px; padding:0; line-height:1; font-size:16px; cursor:pointer;
   background:none; color:var(--texte-doux);
@@ -461,34 +471,54 @@ main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
    signale, dans le flux du jour, ce que j'ai déjà mis de côté. */
 .etoile[aria-pressed="true"]{opacity:1; color:var(--accent)}
 
+/* ---- une ligne du flux ----
+   Chaque élément était un carton : fond blanc, bordure, coins arrondis, ombre, et
+   pour les prioritaires un aplat ocre. Quarante cartons empilés ne hiérarchisent
+   rien — ils donnent le même poids à un élément noté 0,98 et à un autre noté 0,12.
+   Il ne reste qu'un filet entre deux éléments, et le score, qui prend une colonne
+   à lui : on descend la colonne des chiffres sans lire un seul titre. */
 .item{
-  display:block; text-decoration:none; padding:12px 14px; margin-bottom:6px;
-  background:var(--fond-carte); border:1px solid var(--bord); border-radius:9px;
-  border-left:3px solid transparent; transition:border-color .12s, transform .12s;
+  display:grid; grid-template-columns:3rem minmax(0,1fr); gap:0 18px;
+  text-decoration:none; padding:14px 2px; background:none;
+  border:0; border-radius:0;
 }
-.item:hover{border-color:var(--bord); border-left-color:var(--accent)}
-.item.prio{border-left-color:var(--accent); background:var(--accent-doux)}
-.item.lu{opacity:.42}
+.item:hover .corps-item h3{color:var(--accent)}
+/* La ligne éditoriale du site — Claude et l'agentic coding — se marque d'un filet,
+   pas d'un aplat : elle dit « c'est le sujet du site », pas « c'est important ». */
+.item.prio{box-shadow:inset 2px 0 0 var(--accent-doux)}
+.item.lu{opacity:.5}
+.item.lu .neuf{display:none}
+
 .score{
-  margin-left:auto; padding:1px 7px; border-radius:4px; font-size:var(--t-1);
-  font-variant-numeric:tabular-nums; background:var(--fond-doux); color:var(--texte-doux);
+  grid-column:1; text-align:right; padding-top:1px;
+  font-family:var(--mono); font-size:var(--t-3); font-variant-numeric:tabular-nums;
+  color:var(--texte-doux);
 }
-.score.essentiel{background:var(--accent); color:var(--sur-accent); font-weight:600}
-.score.bruit{opacity:.5}
+/* L'ocre est réservé à ce qui compte vraiment : le score essentiel, et lui seul. */
+.score.essentiel{color:var(--accent); font-weight:500}
+.score.bruit, .score.vide{opacity:.45}
+.corps-item{grid-column:2; min-width:0}
+/* L'élément qu'un lien partagé désigne, le temps de le repérer. */
+.enveloppe.vise{box-shadow:inset 0 0 0 2px var(--accent); border-radius:4px}
 .item h3{font-size:var(--t-4); font-weight:500; margin:0 0 5px; line-height:1.4}
-.ligne{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:var(--t-2); color:var(--texte-doux)}
-.src{font-weight:500; color:var(--accent)}
-.item.lu .src{color:var(--texte-doux)}
-.cat{
-  padding:1px 7px; border-radius:4px; background:var(--fond-doux);
-  font-size:var(--t-1); letter-spacing:.02em;
+/* Toute métadonnée passe au mono : source, heure, catégorie, marqueurs. C'est ce qui
+   sépare d'un coup d'œil ce qui se lit de ce qui se mesure. */
+.ligne{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  font-family:var(--mono); font-size:var(--t-1); color:var(--texte-doux);
 }
+/* La source n'est plus en ocre : à quarante par page, elle épuisait l'accent et
+   entrait en concurrence avec le score, qui est le vrai signal. */
+.src{font-weight:500; color:var(--texte)}
+.item.lu .src{color:var(--texte-doux)}
+.cat{text-transform:uppercase; letter-spacing:var(--suivi-mono)}
 .avis{
-  padding:1px 7px; border-radius:4px; font-size:var(--t-1);
+  padding:1px 6px; border-radius:3px; font-size:var(--t-1);
+  text-transform:uppercase; letter-spacing:var(--suivi-mono);
   background:var(--fond-doux); border:1px dashed var(--bord);
 }
 .extrait{
-  margin:6px 0 0; font-size:var(--t-3); color:var(--texte-doux); line-height:1.5;
+  margin:7px 0 0; font-size:var(--t-3); color:var(--texte-doux); line-height:1.55;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 /* ---- carte de signet : accordéon sur la fiche rédigée ---- */

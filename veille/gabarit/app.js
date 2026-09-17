@@ -353,6 +353,20 @@
 
   const echapper = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
 
+  // Une ancre par élément, pour pouvoir envoyer un lien vers UN article et le
+  // retrouver demain. L'URL de l'article ferait une ancre valide mais illisible et
+  // longue de 200 caractères ; on en prend une empreinte courte et stable (FNV-1a),
+  // qui ne change pas d'une construction à l'autre puisqu'elle ne dépend que de l'URL.
+  const ancre = url => {
+    let h = 0x811c9dc5;
+    for (let k = 0; k < url.length; k++) {
+      h ^= url.charCodeAt(k);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return 'i' + h.toString(36);
+  };
+  const parAncre = new Map();
+
   // Classe de mise en avant du verdict : « Utile » et « À tester » sont des actions,
   // « Pour info » et « Peu d'intérêt » ne méritent pas d'attirer l'œil.
   const RANG = {'Utile':'v-fort', 'À tester':'v-fort', 'Pour info':'v-moyen', "Peu d'intérêt":'v-faible'};
@@ -407,16 +421,28 @@
   }
 
   function carte(i){
-    return `<div class="enveloppe">`
+    parAncre.set(ancre(i.url), i.url);
+    return `<div class="enveloppe" id="${ancre(i.url)}">`
       + ((estSignet(i) && i.analyse) ? carteSignet(i) : carteLien(i))
-      + `<div class="actions">${boutonDev(i)}${PUBLIC ? '' : etoile(i)}</div>`
+      + `<div class="actions">${boutonDev(i)}`
+      + `<button class="lien-ancre" data-ancre="${ancre(i.url)}"`
+      + ` title="Copier un lien vers cet élément">Lien</button>`
+      + `${PUBLIC ? '' : etoile(i)}</div>`
       + `<div class="developpement" hidden></div></div>`;
   }
 
+  // Le score sort de la ligne de méta, où il flottait à droite parmi cinq autres
+  // étiquettes, pour prendre une colonne à lui, à gauche. C'est le seul chiffre de la
+  // page, celui par lequel la liste est triée : il doit se lire en descendant la
+  // colonne, sans lire les titres.
   function carteLien(i){
     const h = heure(i.date);
     return `<a class="item${i.prioritaire ? ' prio' : ''}${lus.has(i.url) ? ' lu' : ''}"`
       + ` href="${echapper(i.url)}" target="_blank" rel="noopener" data-url="${echapper(i.url)}">`
+      + (i.score != null
+        ? `<span class="score ${i.voie}" title="Intérêt estimé pour ce site, de 0 à 1">${i.score.toFixed(2)}</span>`
+        : `<span class="score vide" title="Élément antérieur au scoring">—</span>`)
+      + `<div class="corps-item">`
       + `<h3>${echapper(i.titre)}</h3>`
       + `<div class="ligne"><span class="src">${echapper(i.source_nom)}</span>`
       + (estNouveau(i) ? `<span class="neuf">nouveau</span>` : '')
@@ -424,10 +450,9 @@
       + (i.categorie && !estSignet(i) ? `<span class="cat">${echapper(LIBELLES[i.categorie] || i.categorie)}</span>` : '')
       // Inutile dans l'onglet signets : tout y est un tweet, la mention n'informe plus.
       + (i.titre_utilisateur && !estSignet(i) ? `<span class="avis" title="Titre rédigé par un utilisateur : affirmation, pas fait vérifié">titre d'utilisateur</span>` : '')
-      + (i.score != null ? `<span class="score ${i.voie}" title="Intérêt estimé pour ton profil (0 à 1)">${i.score.toFixed(2)}</span>` : '')
       + `</div>`
       + (i.extrait ? `<p class="extrait">${echapper(i.extrait)}</p>` : '')
-      + `</a>`;
+      + `</div></a>`;
   }
 
   // Les favoris s'étalent sur des mois : les regrouper par journée émietterait la
@@ -1038,6 +1063,21 @@
     if (bouton) { e.preventDefault(); basculer(bouton.dataset.url); return; }
     const plus = e.target.closest('.developper');
     if (plus) { e.preventDefault(); developper(plus, false); return; }
+    const ancreBt = e.target.closest('.lien-ancre');
+    if (ancreBt) {
+      e.preventDefault();
+      const adresse = location.origin + location.pathname + '#' + ancreBt.dataset.ancre;
+      const dit = mot => { ancreBt.textContent = mot;
+        setTimeout(() => { ancreBt.textContent = 'Lien'; }, 1800); };
+      // `navigator.clipboard` n'existe pas sur une page ouverte en file:// : le repli
+      // affiche l'adresse dans une invite, d'où elle se copie à la main.
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(adresse).then(() => dit('Copié'), () => prompt('Lien', adresse));
+      } else {
+        prompt('Lien vers cet élément', adresse);
+      }
+      return;
+    }
     const poser = e.target.closest('.poser-ici');
     if (poser) {
       e.preventDefault();
@@ -1134,4 +1174,30 @@
     `Maj ${D.genere} · ${D.jours.length} jour${D.jours.length > 1 ? 's' : ''} d'archive`;
 
   rendre();
+
+  // Un lien reçu pointe vers un élément, pas vers une journée : il faut d'abord
+  // retrouver le jour qui le porte, sans quoi l'ancre viserait un noeud absent du
+  // document. Le surlignage dit lequel des quarante on est venu voir.
+  function allerAncre(){
+    const cible = location.hash.slice(1);
+    if (!cible) return;
+    const jour = D.jours.find(j => j.items.some(i => ancre(i.url) === cible));
+    if (jour && jour.date !== jourActif) allerA(jour.date);
+
+    // L'élément visé peut être filtré par la voie en cours — un lien vers un item
+    // classé « bruit » n'afficherait rien. On élargit alors la voie plutôt que de
+    // laisser la page muette devant un lien qu'on vient de suivre.
+    if (!document.getElementById(cible) && voie !== 'tout') {
+      voie = 'tout';
+      rendreVoies(); rendreSujets(); rendre();
+    }
+    const noeud = document.getElementById(cible);
+    if (!noeud) return;
+    noeud.scrollIntoView({block: 'center'});
+    noeud.classList.add('vise');
+    setTimeout(() => noeud.classList.remove('vise'), 2600);
+  }
+
+  allerAncre();
+  window.addEventListener('hashchange', allerAncre);
 })();
