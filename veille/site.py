@@ -22,6 +22,7 @@ import html
 import json
 import os
 import re
+import unicodedata
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -456,6 +457,81 @@ def _puces(corps: str) -> list[str]:
     return puces
 
 
+# Ce qu'un item porte toujours, même vide : la page s'en sert sans le tester.
+_CHAMPS_OBLIGATOIRES = ("titre", "url", "date", "source_nom", "voie")
+
+
+def _compacter(item: dict) -> dict:
+    """Retire les champs vides avant l'envoi dans la page.
+
+    Un item porte dix-neuf champs, dont la plupart ne servent qu'aux signets ou aux
+    rares éléments concernés : `analyse`, `verdict`, `justification` et `cible` sont
+    vides pour 1 939 des 2 175 items, `version` pour 2 094. Chaque clé vide coûte une
+    trentaine d'octets, répétés deux mille fois. La page les teste déjà toutes avant
+    de s'en servir : absentes ou vides, elle se comporte pareil.
+
+    L'extrait du site source disparaît lorsqu'une phrase du digest le remplace : il
+    n'est alors jamais affiché, et c'est le plus lourd des champs.
+    """
+    compact = {}
+    for cle, valeur in item.items():
+        if cle in _CHAMPS_OBLIGATOIRES:
+            compact[cle] = valeur
+        elif cle == "extrait" and item.get("phrase"):
+            continue
+        elif cle == "score":
+            if valeur is not None:      # 0.0 est un score, pas une absence
+                compact[cle] = valeur
+        elif valeur is True:
+            # Testé avant la comparaison qui suit : en Python True == 1, et un
+            # `valeur == 1` aurait fait disparaître tous les drapeaux vrais.
+            compact[cle] = valeur
+        elif valeur is False or valeur is None or valeur == "" or valeur == []:
+            continue
+        elif cle == "poids" and valeur == 1:
+            continue                    # le poids par défaut, que la page suppose
+        else:
+            compact[cle] = valeur
+    return compact
+
+
+def _titre_normalise(titre: str) -> str:
+    """Titre réduit à sa substance, pour reconnaître deux fois la même annonce."""
+    sans_accent = unicodedata.normalize("NFKD", titre.lower())
+    sans_accent = "".join(c for c in sans_accent if not unicodedata.combining(c))
+    return " ".join(re.findall(r"[a-z0-9]+", sans_accent))
+
+
+def _regrouper_doublons(items: list[dict]) -> list[dict]:
+    """Ne garde qu'une fois une même annonce, en nommant les autres sources.
+
+    La déduplication par URL, faite à la collecte, ne voit pas qu'un billet et son
+    relais chez un agrégateur sont la même chose sous deux adresses. Mesuré sur sept
+    jours : 3 paires sur 392 items, dont deux au titre rigoureusement identique. Le
+    rapprochement se fait donc sur l'égalité stricte des titres normalisés, et non
+    sur une ressemblance — à ce volume, une similarité approximative ferait surtout
+    disparaître de vrais éléments distincts.
+
+    Les items arrivent triés : le premier d'un groupe est le mieux placé, c'est lui
+    qu'on garde. Rien n'est perdu : les autres sources sont citées sur sa ligne.
+    """
+    gardes: dict[str, dict] = {}
+    sortie = []
+    for it in items:
+        cle = _titre_normalise(it.get("titre", ""))
+        if not cle:
+            sortie.append(it)
+            continue
+        principal = gardes.get(cle)
+        if principal is None:
+            gardes[cle] = it
+            it["aussi"] = []
+            sortie.append(it)
+        elif it.get("source_nom") != principal.get("source_nom"):
+            principal["aussi"].append(it.get("source_nom", ""))
+    return sortie
+
+
 @lru_cache(maxsize=1)
 def _sources_de_versions() -> frozenset[str]:
     """Les sources qui publient des versions, repérées à leur flux.
@@ -523,6 +599,7 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
             ),
             reverse=True,
         )
+        items = [_compacter(it) for it in _regrouper_doublons(items)]
 
         # « À retenir » d'un côté, le détail de l'autre. Depuis que chaque élément
         # porte sa phrase dans la liste, les sections thématiques du digest répètent
@@ -675,7 +752,13 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
     # Écriture atomique : le serveur local reconstruit la page pendant qu'un navigateur
     # peut être en train de la lire. Un write_text direct la lui servirait tronquée.
     provisoire = index.with_suffix(".html.tmp")
-    provisoire.write_text(gabarit().replace("__POLICES__", polices()).replace("__DONNEES__", charge), encoding="utf-8")
+    page = (
+        gabarit()
+        .replace("__POLICES__", polices())
+        .replace("__URL__", config.URL_PUBLIQUE)
+        .replace("__DONNEES__", charge)
+    )
+    provisoire.write_text(page, encoding="utf-8")
     os.replace(provisoire, index)
 
     if public:
@@ -690,7 +773,72 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
             json.dumps(cibles, ensure_ascii=False), encoding="utf-8"
         )
 
+        # L'image de partage voyage avec la page : elle est la seule ressource que
+        # les robots d'aperçu iront chercher, et ils exigent une URL absolue.
+        image = DOSSIER_ASSETS / "partage.png"
+        if image.exists():
+            (dossier / "partage.png").write_bytes(image.read_bytes())
+
+        (dossier / "flux.xml").write_text(flux_rss(donnees), encoding="utf-8")
+
     return index
+
+
+# Le flux ne porte que l'essentiel du jour, et non les quatre-vingts items collectés :
+# un lecteur RSS n'est pas une page de veille, il ne se filtre pas. Ce qui y entre est
+# ce que la voie « Essentiel » laisse passer, c'est-à-dire ce qu'on lirait en premier.
+ITEMS_FLUX = 25
+
+
+def flux_rss(donnees: dict) -> str:
+    """Écrit le flux RSS du site public à partir des données déjà préparées."""
+    entrees = []
+    for jour in donnees["jours"]:
+        for it in jour["items"]:
+            if it.get("voie") != "essentiel":
+                continue
+            entrees.append(it)
+        if len(entrees) >= ITEMS_FLUX:
+            break
+
+    def balise(nom: str, valeur: str) -> str:
+        return f"<{nom}>{html.escape(valeur, quote=False)}</{nom}>"
+
+    articles = []
+    for it in entrees[:ITEMS_FLUX]:
+        # Les lecteurs RSS trient sur pubDate : une date RFC 822 est attendue, et une
+        # date ISO y est diversement interprétée. Elle est reconstruite ici.
+        try:
+            quand = datetime.fromisoformat(it["date"]).strftime("%a, %d %b %Y %H:%M:%S %z")
+        except (ValueError, KeyError):
+            quand = ""
+        articles.append(
+            "<item>"
+            + balise("title", it.get("titre", ""))
+            + balise("link", it.get("url", ""))
+            + balise("guid", it.get("url", ""))
+            # `<source>` exigerait un attribut `url` pointant vers le flux d'origine,
+            # que nous n'avons pas : `<category>` dit la même chose et reste valide.
+            + balise("category", it.get("source_nom", ""))
+            + balise("description", it.get("phrase") or it.get("extrait", ""))
+            + (balise("pubDate", quand) if quand else "")
+            + "</item>"
+        )
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0"><channel>'
+        + balise("title", "Veille IA — l'essentiel du jour")
+        + balise("link", config.URL_PUBLIQUE + "/")
+        + balise(
+            "description",
+            "Claude, les agents, les modèles et l'agentic coding : "
+            "collectés, notés et résumés automatiquement, tous les matins.",
+        )
+        + balise("language", "fr")
+        + "".join(articles)
+        + "</channel></rss>\n"
+    )
 
 
 # Le gabarit vit dans veille/gabarit/ depuis le 2026-09-17 : page.html, style.css

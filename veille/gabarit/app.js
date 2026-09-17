@@ -454,6 +454,10 @@
       // l'autre est le texte du site source. Les afficher pareil sans le dire serait
       // faire passer l'un pour l'autre — d'où le marqueur, discret mais présent.
       + (i.phrase ? `<span class="avis" title="Phrase du digest du jour, écrite par le modèle — et non le texte du site source">résumé</span>` : '')
+      // La même annonce relayée ailleurs : une ligne, et les autres sources nommées.
+      // Rien n'est caché, la liste cesse seulement de se répéter.
+      + ((i.aussi && i.aussi.length)
+        ? `<span class="aussi">aussi : ${echapper(i.aussi.join(', '))}</span>` : '')
       + `</div>`
       + (i.phrase || i.extrait
         ? `<p class="extrait">${echapper(i.phrase || i.extrait)}</p>`

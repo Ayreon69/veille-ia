@@ -140,6 +140,10 @@ l'AGI, communiqués d'entreprise sans contenu technique."""
 # développement se rabat sur le titre et l'extrait — voir Site public.md.
 WORKER_LECTURE = os.getenv("VEILLE_WORKER_LECTURE", "").strip().rstrip("/")
 
+# Adresse du site publié. Elle ne sert qu'aux métadonnées de partage et au flux RSS :
+# un aperçu de lien exige des URLs absolues, un chemin relatif n'y est jamais résolu.
+URL_PUBLIQUE = os.getenv("VEILLE_URL_PUBLIQUE", "https://veille-ia-rj.pages.dev").strip().rstrip("/")
+
 
 def charger_sources(inclure_inactives: bool = False) -> list[dict]:
     """Charge sources.yaml et renvoie les sources actives.
