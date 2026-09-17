@@ -406,6 +406,17 @@
   const compteJour = j =>
     j.items.filter(i => !estSignet(i) && VOIES[voie].ok(i) && sujetOk(i)).length;
 
+  // « Aujourd'hui », « Hier », « Il y a 4 jours » — compté depuis le vrai jour du
+  // lecteur et non depuis la dernière date de l'archive : une page ouverte le lundi
+  // doit dire « il y a 3 jours » de son édition du vendredi, pas « aujourd'hui ».
+  const distance = date => {
+    const aujourdhui = new Date(); aujourdhui.setHours(0, 0, 0, 0);
+    const [a, m, j] = date.split('-').map(Number);
+    const n = Math.round((aujourdhui - new Date(a, m - 1, j)) / 86400000);
+    return n === 0 ? "Aujourd'hui" : n === 1 ? 'Hier' : n === 2 ? 'Avant-hier'
+      : n > 0 ? `Il y a ${n} jours` : 'À venir';
+  };
+
   const cleDate = (an, mois, jour) =>
     `${an}-${String(mois + 1).padStart(2, '0')}-${String(jour).padStart(2, '0')}`;
 
@@ -419,12 +430,15 @@
     document.getElementById('suiv').disabled = large || i <= 0;
     btDate.disabled = !!requete;
 
+    // Le bouton portait la date en toutes lettres ; elle est montée dans la titraille
+    // le 2026-09-17. Il dit maintenant à quelle distance de soi on se trouve — la seule
+    // chose que la date écrite ne dit pas, et celle qu'on cherche en arrivant.
     const jours = `${DATES.length} jour${DATES.length > 1 ? 's' : ''}`;
     btDate.innerHTML = requete
       ? `Recherche sur ${jours}`
       : jourActif === null
         ? `Toutes les journées<span class="n">${DATES.length}</span>`
-        : `${echapper(PAR_DATE.get(jourActif).libelle)}`
+        : `${echapper(distance(jourActif))}`
           + `<span class="n">${compteJour(PAR_DATE.get(jourActif))}</span>`;
     document.getElementById('tousjours').setAttribute('aria-pressed', jourActif === null);
   }
@@ -650,9 +664,16 @@
         ? `<p class="vide">Rien ce jour-là dans cette voie.<br><br>`
           + `Élargir la voie ci-dessus, ou passer à la journée précédente avec &lsaquo;.</p>`
         : `<p class="vide">Aucun élément ne correspond.</p>`);
-    resumer(visibles, (vue === 'signets' || surToutLArchive())
-      ? `${D.jours.length} jour${D.jours.length > 1 ? 's' : ''}`
-      : PAR_DATE.get(jourActif).libelle);
+    const archive = `sur ${D.jours.length} jour${D.jours.length > 1 ? 's' : ''}`;
+    resumer(
+      visibles,
+      vue === 'signets' ? VUES.signets
+        : requete ? `« ${requete} »`
+        : surToutLArchive() ? 'Toutes les journées'
+        : PAR_DATE.get(jourActif).libelle,
+      'élément',
+      (vue === 'signets' || surToutLArchive() || requete) ? archive : '',
+    );
   }
 
   function rendreFavoris(){
@@ -663,12 +684,18 @@
         + `Cliquer sur l'étoile ☆ en haut d'un élément, dans n'importe quel onglet, `
         + `pour le mettre de côté. Il restera ici même quand sa journée sera sortie `
         + `de l'archive.</p>`);
-    resumer(section.n, 'mis de côté');
+    resumer(section.n, VUES.favoris, 'favori');
   }
 
-  const resumer = (n, suffixe, unite = 'élément') => {
-    document.getElementById('resume').textContent =
-      `${n} ${unite}${n > 1 ? 's' : ''} · ${suffixe} · maj ${D.genere}`;
+  // Une seule ligne disait tout : « 138 éléments · Mardi 16 septembre · maj … ». Elle
+  // est séparée en trois le 2026-09-17, parce que les trois ne changent pas au même
+  // rythme : le titre est ce qu'on lit, les compteurs ce qu'on vient de filtrer, et la
+  // fraîcheur de la page ne bouge pas de la visite — elle vit dans la barre d'état.
+  const resumer = (n, titre, unite = 'élément', etendue = '') => {
+    document.getElementById('titraille').textContent = titre;
+    document.getElementById('compteurs').innerHTML =
+      `<span><b>${n}</b> ${unite}${n > 1 ? 's' : ''}</span>`
+      + (etendue ? `<span>${echapper(etendue)}</span>` : '');
   };
 
   const itemPour = url => parUrl.get(url) || favoris[url] || null;
@@ -992,6 +1019,11 @@
     boutonSauver.hidden = true;
     if (listeFavoris().length || Object.keys(retires).length) versLeVault();
   }
+
+  // La barre d'état ne dépend d'aucun filtre : elle dit quand la page a été fabriquée
+  // et ce qu'elle contient, une fois pour toutes.
+  document.getElementById('resume').textContent =
+    `Maj ${D.genere} · ${D.jours.length} jour${D.jours.length > 1 ? 's' : ''} d'archive`;
 
   rendre();
 })();

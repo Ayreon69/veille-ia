@@ -10,13 +10,34 @@ __STYLE__
 </head>
 <body>
 
+<div class="etat">
+  <span class="nom"><span class="point"></span>Veille IA</span>
+  <span id="resume"></span>
+  <span class="droite">
+    <div class="onglets" id="onglets" role="tablist"></div>
+    <button id="sauver" hidden title="Télécharge un fichier favoris-....json, repris à la prochaine synchronisation">Sauvegarder</button>
+    <button id="cle" hidden title="Votre clé Gemini, pour développer un article">Clé API</button>
+  </span>
+</div>
+
 <header>
   <div class="bandeau">
-    <div class="titre">
-      <h1>Veille IA</h1>
-      <span class="meta" id="resume"></span>
+    <div class="nav-jour" id="nav-jour">
+      <button class="fleche" id="prec" aria-label="Jour précédent" title="Jour précédent (flèche gauche)">&lsaquo;</button>
+      <button class="fleche" id="suiv" aria-label="Jour suivant" title="Jour suivant (flèche droite)">&rsaquo;</button>
+      <button id="datejour" aria-haspopup="dialog" aria-expanded="false" title="Choisir une date"></button>
+      <span class="aide"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> changent de jour</span>
+      <button id="tousjours" aria-pressed="false" title="Empiler toutes les journées, comme avant">Tout</button>
+      <div class="calendrier" id="calendrier" role="dialog" aria-label="Choisir une date" hidden></div>
     </div>
-    <div class="onglets" id="onglets" role="tablist"></div>
+    <div class="nav-jour" id="nav-semaine" hidden>
+      <button class="fleche" id="sem-prec" aria-label="Semaine précédente" title="Semaine précédente (flèche gauche)">&lsaquo;</button>
+      <button class="fleche" id="sem-suiv" aria-label="Semaine suivante" title="Semaine suivante (flèche droite)">&rsaquo;</button>
+      <button id="sem-libelle" aria-haspopup="listbox" aria-expanded="false" title="Choisir une semaine"></button>
+      <div class="calendrier liste-semaines" id="liste-semaines" role="listbox" aria-label="Choisir une semaine" hidden></div>
+    </div>
+    <h1 class="titraille" id="titraille">Veille IA</h1>
+    <p class="compteurs" id="compteurs"></p>
     <div class="outils">
       <input id="recherche" type="search" placeholder="Rechercher un titre, une source…" autocomplete="off">
       <select id="tri" aria-label="Ordre de tri">
@@ -24,21 +45,6 @@ __STYLE__
         <option value="date">Plus récent</option>
         <option value="date-inverse">Plus ancien</option>
       </select>
-      <button id="sauver" hidden title="Télécharge un fichier favoris-....json, repris à la prochaine synchronisation">Sauvegarder</button>
-      <button id="cle" hidden title="Votre clé Gemini, pour développer un article">Clé API</button>
-    </div>
-    <div class="nav-jour" id="nav-jour">
-      <button class="fleche" id="prec" aria-label="Jour précédent" title="Jour précédent (flèche gauche)">&lsaquo;</button>
-      <button id="datejour" aria-haspopup="dialog" aria-expanded="false" title="Choisir une date"></button>
-      <button class="fleche" id="suiv" aria-label="Jour suivant" title="Jour suivant (flèche droite)">&rsaquo;</button>
-      <button id="tousjours" aria-pressed="false" title="Empiler toutes les journées, comme avant">Tout</button>
-      <div class="calendrier" id="calendrier" role="dialog" aria-label="Choisir une date" hidden></div>
-    </div>
-    <div class="nav-jour" id="nav-semaine" hidden>
-      <button class="fleche" id="sem-prec" aria-label="Semaine précédente" title="Semaine précédente (flèche gauche)">&lsaquo;</button>
-      <button id="sem-libelle" aria-haspopup="listbox" aria-expanded="false" title="Choisir une semaine"></button>
-      <button class="fleche" id="sem-suiv" aria-label="Semaine suivante" title="Semaine suivante (flèche droite)">&rsaquo;</button>
-      <div class="calendrier liste-semaines" id="liste-semaines" role="listbox" aria-label="Choisir une semaine" hidden></div>
     </div>
   </div>
   <div class="filtres voies" id="voies"></div>

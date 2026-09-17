@@ -5,17 +5,21 @@ __POLICES__
    en clair, violacée en sombre. Le thème sombre ne redéfinit donc que les bases ;
    --bord et --accent-doux, qui sont des mélanges, suivent tout seuls. */
 :root{
-  --h-accent:41;     /* terre cuite */
-  --h-neutre:68;     /* gris chauds */
-  --l-accent:60%;
-  --l-accent-doux:95.8%;
+  /* L'accent est passé de la terre cuite (41°) à l'ocre (62°) le 2026-09-17, et il
+     s'est assombri : il ne sert plus de couleur d'ambiance mais de signal, réservé au
+     score, à l'état actif et aux liens du texte. Un ton plus sombre et moins chromatique
+     supporte le blanc au-dessus (5,6:1) et ne crie pas quand il apparaît vingt fois. */
+  --h-accent:62;     /* ocre */
+  --h-neutre:75;     /* le papier, plus chaud qu'un gris */
+  --l-accent:48.5%;
+  --l-accent-doux:94%;
 
-  --accent:oklch(var(--l-accent) .136 var(--h-accent));
-  --fond:oklch(98.6% .002 var(--h-neutre));
-  --fond-carte:oklch(100% 0 var(--h-neutre));
-  --fond-doux:oklch(95.6% .0034 var(--h-neutre));
-  --texte:oklch(21.9% .005 var(--h-neutre));
-  --texte-doux:oklch(51% .012 var(--h-neutre));
+  --accent:oklch(var(--l-accent) .104 var(--h-accent));
+  --fond:oklch(97.3% .006 var(--h-neutre));
+  --fond-carte:oklch(99.4% .004 var(--h-neutre));
+  --fond-doux:oklch(95% .007 var(--h-neutre));
+  --texte:oklch(20% .006 var(--h-neutre));
+  --texte-doux:oklch(45.5% .014 var(--h-neutre));
 
   /* Un bord n'est rien d'autre qu'un soupçon d'encre dans le fond doux, et le
      fond d'accent porte la teinte de l'accent, à la clarté d'un fond.
@@ -24,34 +28,49 @@ __POLICES__
      fond interpole la teinte, et 10 % ne suffisent pas à ramener un fond sombre de
      295° vers les 41° de la terre cuite — on obtenait un violet au lieu d'un brun. */
   --bord:color-mix(in oklch, var(--texte) 7%, var(--fond-doux));
-  --accent-doux:oklch(var(--l-accent-doux) .018 var(--h-accent));
+  --bord-fort:color-mix(in oklch, var(--texte) 20%, var(--fond-doux));
+  --accent-doux:oklch(var(--l-accent-doux) .024 var(--h-accent));
 
   --ombre:0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
 
-  /* Cinq tailles, pas une de plus. Toute valeur hors de cette échelle est un oubli. */
-  --t-1:11.5px;      /* étiquettes, scores, pied de page */
+  /* Cinq tailles, pas une de plus. Toute valeur hors de cette échelle est un oubli.
+     Le plancher est à 12 px : en dessous, une métadonnée devient illisible sur un
+     écran de téléphone, et la page en est pleine. --t-1 valait 11,5 px. */
+  --t-1:12px;        /* étiquettes, scores, pied de page */
   --t-2:12.5px;      /* méta, lignes secondaires */
   --t-3:13.5px;      /* contrôles, notes, texte dense */
   --t-4:15px;        /* corps de texte et titres d'articles */
-  --t-5:19px;        /* titre du site */
+  --t-5:19px;        /* sous-titres */
+
+  /* La titraille du jour, seule taille vraiment grande de la page : c'est elle qui
+     dit qu'on lit une édition datée et non une liste de liens. */
+  --t-titraille:clamp(2rem, 5.2vw, 3.2rem);
+  --suivi-mono:.12em;   /* filature des capitales en mono */
+  --suivi-etiq:.2em;    /* étiquettes de section, plus aérées */
+  --gouttiere:clamp(16px, 4vw, 20px);
 
   /* Ce qui s'écrit SUR l'accent. En thème clair l'accent est sombre et le blanc
      convient (4,4:1) ; en sombre il est clair, et le blanc y tombe à 2,67:1 — sous le
      seuil minimal de 3. Le fond y remonte à 6,8:1. Mesuré, pas supposé. */
   --sur-accent:oklch(100% 0 0);
 
+  /* Trois familles, trois rôles, jamais interchangeables : Fraunces ne sert qu'à la
+     titraille du jour, le mono à tout ce qui est mesure (dates, scores, compteurs,
+     étiquettes), la sans à ce qui se lit en continu. */
   --pile:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --titre:Fraunces,Georgia,'Times New Roman',serif;
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --h-neutre:295;
-    --l-accent:71.4%;
+    --h-neutre:290;
+    --l-accent:75%;
     --l-accent-doux:25.9%;
-    --fond:oklch(19.9% .010 var(--h-neutre));
-    --fond-carte:oklch(23.4% .0115 var(--h-neutre));
-    --fond-doux:oklch(26.8% .013 var(--h-neutre));
-    --texte:oklch(94% .008 var(--h-neutre));
-    --texte-doux:oklch(68.2% .020 var(--h-neutre));
+    --fond:oklch(13.5% .008 var(--h-neutre));
+    --fond-carte:oklch(18% .010 var(--h-neutre));
+    --fond-doux:oklch(21.5% .011 var(--h-neutre));
+    --texte:oklch(93.5% .010 85);
+    --texte-doux:oklch(68.2% .016 85);
     --sur-accent:var(--fond);
     --ombre:0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
   }
@@ -69,33 +88,66 @@ a{color:inherit}
 h1,h2,h3,h4,.item h3,.signet .t{text-wrap:balance}
 p,li,.resume,.analyse{text-wrap:pretty}
 
-/* ---- en-tête ---- */
-header{
-  position:sticky; top:0; z-index:10; background:var(--fond);
+/* ---- barre d'état ----
+   Seul élément collant de la page. L'en-tête entier l'était jusqu'au 2026-09-17 : il
+   emportait la titraille, la recherche et deux rangées de filtres, soit près du tiers
+   d'un écran de téléphone confisqué en permanence. Ne reste épinglé que ce qui doit
+   l'être — où l'on est, quand la page a été faite, et de quoi changer de vue. */
+.etat{
+  position:sticky; top:0; z-index:30;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:8px var(--gouttiere);
+  background:color-mix(in oklab, var(--fond) 92%, transparent);
+  backdrop-filter:blur(6px);
   border-bottom:1px solid var(--bord);
+  font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
 }
-.bandeau{max-width:880px; margin:0 auto; padding:18px 20px 12px}
-.titre{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
-h1{font-size:var(--t-5); margin:0; letter-spacing:-.01em}
-.meta{font-size:var(--t-2); color:var(--texte-doux)}
+.etat .nom{color:var(--texte); font-weight:500; letter-spacing:var(--suivi-etiq)}
+/* Le point n'est pas un ornement : c'est le seul endroit de la barre où l'accent
+   paraît, et il marque le site lui-même. */
+.etat .point{
+  display:inline-block; width:6px; height:6px; margin-right:8px;
+  border-radius:50%; background:var(--accent); vertical-align:.1em;
+}
+.etat .droite{margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+/* Sous 40 rem, la barre garde le nom et les onglets ; le résumé se lit déjà sous la
+   titraille, il n'a pas besoin d'occuper une deuxième ligne. */
+@media (max-width:40rem){ .etat #resume{display:none} }
+
+/* ---- en-tête ---- */
+header{background:var(--fond); border-bottom:1px solid var(--bord)}
+.bandeau{max-width:880px; margin:0 auto; padding:26px var(--gouttiere) 14px}
+.titraille{
+  font-family:var(--titre); font-optical-sizing:auto;
+  font-size:var(--t-titraille); font-weight:400; line-height:1.02; letter-spacing:-.02em;
+  margin:14px 0 10px;
+}
+/* Les libellés de journée arrivent en minuscules de `strftime` (« jeudi 17 septembre »).
+   La capitale se met ici, et non dans les données : ce même libellé sert ailleurs en
+   milieu de phrase, où la majuscule serait une faute. */
+.titraille::first-letter{text-transform:uppercase}
+.compteurs{
+  display:flex; gap:20px; flex-wrap:wrap; margin:0;
+  font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
+}
+.compteurs b{color:var(--texte); font-weight:500; font-variant-numeric:tabular-nums}
+/* Les onglets ont quitté le corps de l'en-tête pour la barre d'état : ils changent de
+   vue, pas de journée, et n'ont rien à faire entre la titraille et les filtres du jour.
+   Le groupe en pilule a suivi — dans une barre de 12 px en capitales, un aplat et une
+   ombre pesaient plus que l'information. L'onglet actif se marque d'un filet. */
 .onglets{
-  /* `flex-wrap` depuis l'ajout du quatrième onglet : à trois la rangée tenait en
-     375 px, à quatre elle poussait la page à 415 et faisait défiler horizontalement.
-     Passer à la ligne vaut mieux qu'un défilement latéral, qui cacherait un onglet. */
-  display:inline-flex; flex-wrap:wrap; max-width:100%;
-  gap:3px; margin-top:14px; padding:3px;
-  background:var(--fond-doux); border-radius:10px;
+  display:inline-flex; flex-wrap:wrap; max-width:100%; gap:2px;
 }
 .onglet{
-  padding:6px 15px; font:inherit; font-size:var(--t-3); font-weight:500; cursor:pointer;
-  background:none; border:0; border-radius:8px; color:var(--texte-doux);
+  padding:6px 9px; font:inherit; cursor:pointer;
+  background:none; border:0; border-bottom:2px solid transparent; color:var(--texte-doux);
 }
 .onglet:hover{color:var(--texte)}
-.onglet[aria-selected="true"]{
-  background:var(--fond-carte); color:var(--texte); box-shadow:var(--ombre);
-}
-.onglet .n{opacity:.6; margin-left:6px; font-variant-numeric:tabular-nums}
-.outils{display:flex; gap:10px; margin-top:12px}
+.onglet[aria-selected="true"]{color:var(--accent); border-bottom-color:var(--accent)}
+.onglet .n{opacity:.6; margin-left:5px; font-variant-numeric:tabular-nums}
+.outils{display:flex; gap:10px; margin-top:16px}
 #recherche{
   flex:1; min-width:0; padding:8px 12px; font:inherit; font-size:var(--t-3);
   background:var(--fond-carte); color:var(--texte);
@@ -108,20 +160,18 @@ h1{font-size:var(--t-5); margin:0; letter-spacing:-.01em}
   border:1px solid var(--bord); border-radius:8px;
 }
 #tri:focus{outline:2px solid var(--accent); outline-offset:-1px}
-#sauver{
-  flex:none; padding:8px 12px; font:inherit; font-size:var(--t-3); font-weight:500; cursor:pointer;
-  background:var(--fond-carte); color:var(--accent);
-  border:1px solid var(--bord); border-radius:8px; white-space:nowrap;
+/* Les deux boutons de la barre d'état héritent d'elle : mono, capitales, filet fin.
+   36 px de haut plutôt que 44 — la barre est épinglée en permanence, et ces deux
+   boutons ne sont pas ce qu'on vient chercher. Les flèches de jour, elles, ont 44. */
+#sauver, #cle{
+  flex:none; padding:0 10px; min-height:36px; font:inherit; cursor:pointer;
+  white-space:nowrap; background:none; color:var(--texte-doux);
+  border:1px solid var(--bord); border-radius:3px;
 }
+#sauver{color:var(--accent); border-color:var(--bord-fort)}
 #sauver:hover{background:var(--accent-doux)}
-#sauver[hidden]{display:none}
-#cle{
-  flex:none; padding:8px 12px; font:inherit; font-size:var(--t-3); cursor:pointer;
-  background:var(--fond-carte); color:var(--texte-doux);
-  border:1px solid var(--bord); border-radius:8px; white-space:nowrap;
-}
+#sauver[hidden], #cle[hidden]{display:none}
 #cle:hover{color:var(--accent); border-color:var(--accent)}
-#cle[hidden]{display:none}
 #cle[data-active="true"]{color:var(--accent); border-color:var(--accent)}
 
 /* ---- panneau de clé, site public ---- */
@@ -186,21 +236,40 @@ h1{font-size:var(--t-5); margin:0; letter-spacing:-.01em}
 .un-jour > .jour > h2{display:none}
 .un-jour > .jour{margin-top:10px}
 
-/* ---- navigation par jour ---- */
-.nav-jour{display:flex; align-items:center; gap:6px; margin-top:12px; position:relative}
+/* ---- navigation par jour ----
+   Elle passe au-dessus de la titraille et non plus dessous : on choisit la journée,
+   puis on lit son titre. Les flèches sont carrées, à 44 px, et ne s'étirent plus sur
+   toute la largeur — c'est le geste le plus répété de la page. */
+.nav-jour{display:flex; align-items:center; gap:6px; position:relative; flex-wrap:wrap}
 /* Même piège que `.filtres` : `display:flex` l'emporterait sur la règle de [hidden]. */
 .nav-jour[hidden]{display:none}
 .nav-jour button{
-  font:inherit; font-size:var(--t-3); cursor:pointer; color:var(--texte);
-  background:var(--fond-carte); border:1px solid var(--bord); border-radius:8px;
-  padding:7px 10px;
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; cursor:pointer; color:var(--texte-doux);
+  background:none; border:1px solid var(--bord); border-radius:3px;
+  min-height:44px; padding:0 12px;
 }
 .nav-jour button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
 .nav-jour button:disabled{opacity:.35; cursor:default}
-.nav-jour .fleche{flex:none; width:34px; padding:7px 0; line-height:1; font-size:16px}
-#datejour{flex:1; min-width:0; text-align:left; font-weight:500}
-#datejour .n{float:right; font-weight:400; color:var(--texte-doux); font-variant-numeric:tabular-nums}
-#tousjours{flex:none; color:var(--texte-doux)}
+.nav-jour .fleche{
+  flex:none; width:44px; padding:0; line-height:1;
+  font-size:18px; letter-spacing:0; color:var(--texte);
+}
+#datejour, #sem-libelle{color:var(--texte); font-weight:500}
+#datejour .n, #sem-libelle .n{
+  margin-left:8px; font-weight:400; color:var(--texte-doux); font-variant-numeric:tabular-nums;
+}
+/* L'aide clavier : elle ne se dit qu'une fois, et seulement là où un clavier existe. */
+.nav-jour .aide{
+  margin-left:4px; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
+}
+.nav-jour kbd{
+  font:inherit; border:1px solid var(--bord); border-bottom-width:2px;
+  border-radius:3px; padding:1px 4px;
+}
+@media (max-width:52rem){ .nav-jour .aide{display:none} }
+#tousjours{margin-left:auto}
 #tousjours[aria-pressed="true"]{
   background:var(--accent); border-color:var(--accent); color:var(--sur-accent); font-weight:500;
 }
