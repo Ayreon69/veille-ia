@@ -15,9 +15,9 @@ compatibility_date = "2026-08-01"
 
 [vars]
 # Origine du site public. Sert de source pour la liste blanche (SITE/urls.json) et
-# d'origine autorisée en CORS. À remplacer par l'adresse réelle après le premier
-# déploiement des pages.
-SITE = "https://veille-ia.pages.dev"
+# d'origine autorisée en CORS. Renseignée le 2026-09-17, après création du projet
+# Pages : `veille-ia` était déjà pris par un tiers.
+SITE = "https://veille-ia-rj.pages.dev"
 
 [observability]
 enabled = true
