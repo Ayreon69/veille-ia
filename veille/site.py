@@ -377,6 +377,22 @@ def charger_semaines(limite: int = SEMAINES_AFFICHEES) -> list[dict]:
     return semaines
 
 
+@lru_cache(maxsize=1)
+def _sources_de_versions() -> frozenset[str]:
+    """Les sources qui publient des versions, repérées à leur flux.
+
+    Un flux `releases.atom` de GitHub ne publie que des versions : c'est la donnée
+    elle-même qui le dit, pas le nom qu'on a écrit dans sources.yaml. La page s'en
+    sert pour tenir la colonne « Versions publiées », qui répond à une question
+    distincte de « qu'est-ce qui s'est écrit aujourd'hui ».
+    """
+    return frozenset(
+        s["id"]
+        for s in config.charger_sources(inclure_inactives=True)
+        if "/releases.atom" in (s.get("url") or "")
+    )
+
+
 def _preparer(jours: list[dict], public: bool = False) -> dict:
     """Assemble la structure consommée par la page.
 
@@ -406,6 +422,7 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
             it = dict(it)
             it["prioritaire"] = _prioritaire(it)
             it["voie"] = config.voie(it.get("score"))
+            it["version"] = it.get("source_id") in _sources_de_versions()
             items.append(it)
 
         # Claude reste en tête quoi qu'il arrive, avant même le score : c'est la

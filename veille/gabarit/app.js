@@ -706,9 +706,42 @@
     resumer(SEMAINES.length, s.libelle, 'semaine');
   }
 
+  // ---- rail ----
+  // « Quelles versions sont sorties » est une question distincte de « qu'est-ce qui
+  // s'est écrit » : pour qui suit Claude Code ou MCP, c'est même la première. Noyée
+  // dans un flux trié par score, elle n'avait pas de réponse à un coup d'œil.
+  const rail = document.getElementById('rail');
+
+  function rendreRail(){
+    // Le rail décrit la journée affichée, pas la sélection en cours : il reste stable
+    // quand on change de voie ou de sujet, sinon il perdrait son rôle de repère.
+    const jours = joursAffiches();
+    const items = jours.flatMap(j => j.items).filter(i => !estSignet(i));
+    if (vue !== 'veille' || !items.length) { rail.hidden = true; return; }
+
+    const versions = items.filter(i => i.version).slice(0, 8);
+    const sources = [...items.reduce((m, i) => m.set(i.source_nom, (m.get(i.source_nom) || 0) + 1), new Map())]
+      .sort((a, b) => b[1] - a[1]);
+
+    rail.innerHTML =
+      (versions.length
+        ? `<section class="bloc-versions"><h2>Versions publiées</h2><ul class="versions">`
+          + versions.map(i =>
+              `<li><a href="#${ancre(i.url)}"><span class="v-source">${echapper(i.source_nom.replace(' (releases)', ''))}</span>`
+              + `<span class="v-num">${echapper(i.titre)}</span></a></li>`).join('')
+          + `</ul></section>`
+        : '')
+      + `<section class="bloc-sources"><h2>Sources du jour</h2><ul class="sources">`
+      + sources.map(([nom, n]) =>
+          `<li><span>${echapper(nom)}</span><b>${n}</b></li>`).join('')
+      + `</ul></section>`;
+    rail.hidden = false;
+  }
+
   function rendre(){
     // Les deux barres se rafraîchissent avant tout retour anticipé : chacune se masque
     // d'elle-même hors de sa vue, encore faut-il qu'on l'appelle.
+    rendreRail();
     rendreNavJour();
     rendreNavSemaine();
     if (vue === 'semaine') return rendreSemaine();

@@ -48,6 +48,8 @@ __POLICES__
   --suivi-mono:.12em;   /* filature des capitales en mono */
   --suivi-etiq:.2em;    /* étiquettes de section, plus aérées */
   --gouttiere:clamp(16px, 4vw, 20px);
+  /* Une seule largeur de page : en-tête, filtres et colonnes s'y alignent. */
+  --page:1180px;
 
   /* Ce qui s'écrit SUR l'accent. En thème clair l'accent est sombre et le blanc
      convient (4,4:1) ; en sombre il est clair, et le blanc y tombe à 2,67:1 — sous le
@@ -117,7 +119,7 @@ p,li,.resume,.analyse{text-wrap:pretty}
 
 /* ---- en-tête ---- */
 header{background:var(--fond); border-bottom:1px solid var(--bord)}
-.bandeau{max-width:880px; margin:0 auto; padding:26px var(--gouttiere) 14px}
+.bandeau{max-width:var(--page); margin:0 auto; padding:26px var(--gouttiere) 14px}
 .titraille{
   font-family:var(--titre); font-optical-sizing:auto;
   font-size:var(--t-titraille); font-weight:400; line-height:1.02; letter-spacing:-.02em;
@@ -196,7 +198,7 @@ header{background:var(--fond); border-bottom:1px solid var(--bord)}
 
 /* ---- panneau de clé, site public ---- */
 .panneau-cle{
-  max-width:880px; margin:0 auto; padding:0 20px 14px; font-size:var(--t-3);
+  max-width:var(--page); margin:0 auto; padding:0 20px 14px; font-size:var(--t-3);
   color:var(--texte-doux); line-height:1.6;
 }
 .panneau-cle[hidden]{display:none}
@@ -224,13 +226,13 @@ header{background:var(--fond); border-bottom:1px solid var(--bord)}
 .panneau-cle button:hover{border-color:var(--accent)}
 .panneau-cle .note{margin-top:10px; font-size:var(--t-2); opacity:.85}
 .bandeau-public{
-  max-width:880px; margin:0 auto; padding:0 20px 12px;
+  max-width:var(--page); margin:0 auto; padding:0 20px 12px;
   font-size:var(--t-2); color:var(--texte-doux); line-height:1.55;
 }
 .bandeau-public[hidden]{display:none}
 .filtres{
-  display:flex; gap:6px; overflow-x:auto; padding:10px 20px 12px;
-  max-width:880px; margin:0 auto; scrollbar-width:none;
+  display:flex; gap:6px; overflow-x:auto; padding:10px var(--gouttiere) 12px;
+  max-width:var(--page); margin:0 auto; scrollbar-width:none;
 }
 .filtres::-webkit-scrollbar{display:none}
 /* `display:flex` ci-dessus l'emporterait sur la règle par défaut de [hidden]. */
@@ -371,7 +373,62 @@ header{background:var(--fond); border-bottom:1px solid var(--bord)}
 .lien-jour[disabled]{color:var(--texte-doux); opacity:.55; cursor:default}
 
 /* ---- flux ---- */
-main{max-width:880px; margin:0 auto; padding:8px 20px 80px}
+/* ---- deux colonnes ----
+   Le flux garde sa largeur de lecture ; le rail prend la place restante à droite.
+   Sous 68 rem il passe sous le flux plutôt que de rétrécir : à 15 rem, une liste de
+   sources devient une colonne de mots coupés. */
+.colonnes{
+  display:grid; grid-template-columns:minmax(0,1fr) 17rem; gap:0 44px;
+  max-width:var(--page); margin:0 auto; padding:0 var(--gouttiere) 80px;
+  align-items:start;
+}
+@media (max-width:68rem){ .colonnes{grid-template-columns:minmax(0,1fr)} }
+main{min-width:0; padding:8px 0 0}
+
+.rail{
+  position:sticky; top:66px; padding-top:22px;
+  font-size:var(--t-3); color:var(--texte-doux);
+}
+.rail[hidden]{display:none}
+/* Sous 68 rem, le rail placé après le flux atterrissait à 14 000 px du haut : sur un
+   téléphone, « Versions publiées » n'était jamais vu. Il remonte donc avant le flux,
+   et n'y garde que les versions — la liste des sources est un repère de coup d'œil,
+   pas de quoi repousser l'actualité de quatorze lignes. */
+@media (max-width:68rem){
+  .rail{position:static; order:-1; padding-top:10px}
+  .rail .bloc-sources{display:none}
+  .rail section + section{margin-top:0}
+}
+.rail section + section{margin-top:26px}
+.rail h2{
+  display:flex; align-items:center; gap:10px; margin:0 0 10px;
+  font-family:var(--mono); font-size:var(--t-1); font-weight:500;
+  letter-spacing:var(--suivi-etiq); text-transform:uppercase; color:var(--texte);
+}
+/* Le filet pointillé prolonge le titre jusqu'au bord : c'est ce qui tient la colonne
+   ensemble sans lui donner de cadre. */
+.rail h2::after{
+  content:""; flex:1; height:1px;
+  background:repeating-linear-gradient(90deg, var(--bord-fort) 0 1px, transparent 1px 5px);
+}
+.rail ul{list-style:none; margin:0; padding:0}
+.versions li{margin-bottom:9px}
+.versions a{display:block; text-decoration:none}
+.versions a:hover .v-num{color:var(--accent)}
+.v-source{
+  display:block; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); color:var(--texte-doux);
+}
+.v-num{display:block; font-family:var(--mono); font-size:var(--t-3); color:var(--texte)}
+/* Points de conduite entre le nom de la source et son compte, comme dans un sommaire :
+   l'œil suit la ligne au lieu de traverser un vide. */
+.sources li{display:flex; align-items:baseline; gap:6px; margin-bottom:6px}
+.sources li span{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.sources li::after{
+  content:""; order:1; flex:1 1 auto; height:1px; transform:translateY(-3px);
+  background:repeating-linear-gradient(90deg, var(--bord-fort) 0 1px, transparent 1px 4px);
+}
+.sources li b{order:2; font-family:var(--mono); font-weight:500; color:var(--texte); font-variant-numeric:tabular-nums}
 .jour{margin-top:26px}
 .jour > h2{
   font-size:var(--t-3); font-weight:600; text-transform:uppercase; letter-spacing:.06em;
