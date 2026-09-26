@@ -25,6 +25,11 @@ def main() -> int:
         metavar="AAAA-Wxx",
         help="régénère une semaine passée, ex. 2026-W33 (défaut : la dernière complète)",
     )
+    parseur.add_argument(
+        "--si-absent",
+        action="store_true",
+        help="ne fait rien si le digest de la semaine existe déjà (rattrapage quotidien)",
+    )
     args = parseur.parse_args()
 
     # Le digest porte sur la dernière semaine ISO **complète**, du lundi au dimanche,
@@ -42,6 +47,14 @@ def main() -> int:
         aujourd_hui = config.aujourdhui()
         fin = aujourd_hui - timedelta(days=aujourd_hui.isoweekday())   # dimanche écoulé
     debut = fin - timedelta(days=6)                                     # son lundi
+
+    # Le rattrapage : l'hebdo n'était tenté qu'une fois, le lundi. Le 21/09, Gemini a
+    # répondu 503 à cette unique tentative et la semaine 38 n'a jamais été écrite. Le
+    # run quotidien le relance donc chaque jour ; il ne coûte un appel au modèle que
+    # tant que la note manque.
+    if args.si_absent and (config.DOSSIER_DIGESTS / f"{render.nom_note_hebdo(fin)}.md").exists():
+        print(f"Digest {render.nom_note_hebdo(fin)} déjà écrit — rien à rattraper.")
+        return 0
 
     noms = vault.notes_quotidiennes_entre(debut, fin)
     if not noms:

@@ -33,3 +33,26 @@ def test_le_style_et_le_script_ne_sont_pas_vides():
 
     assert len(style) > 5_000, "le CSS n'a pas été inséré"
     assert len(script) > 20_000, "le JS n'a pas été inséré"
+
+
+def test_le_theme_choisi_est_pose_avant_la_feuille_de_style():
+    """Posé après, la page s'afficherait un instant dans l'autre thème à chaque visite."""
+    g = site.gabarit()
+
+    assert "veille-theme" in g
+    assert g.index("veille-theme") < g.index("<style>")
+
+
+def test_les_tendances_sont_aussi_publiees():
+    """Tendances ne lit que les journées de la page : le site public y a droit.
+
+    Le test lit la déclaration des vues publiques dans le script, et vérifie qu'elle
+    ne nomme ni les signets, ni les favoris, ni la semaine.
+    """
+    g = site.gabarit()
+    # « ? {veille:'Veille', …} » : la première ligne après le test du mode public.
+    publiques = g.split("const VUES = D.public", 1)[1].split("?", 1)[1].split("\n", 1)[0]
+
+    assert "tendances" in publiques
+    for privee in ("signets", "favoris", "semaine"):
+        assert privee not in publiques

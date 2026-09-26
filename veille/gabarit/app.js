@@ -5,15 +5,30 @@
   const barre = document.getElementById('filtres');
   const barreVoies = document.getElementById('voies');
   const boutonSauver = document.getElementById('sauver');
+  const etat = document.getElementById('etat');
+
+  // Les changements de journée et de vue passent par l'API View Transitions quand le
+  // navigateur la connaît : l'ancienne liste glisse dans le sens du temps, la nouvelle
+  // arrive. Sans elle, ou si le système demande moins d'animations, la mise à jour est
+  // immédiate — l'animation n'est jamais une condition du fonctionnement.
+  const sobre = matchMedia('(prefers-reduced-motion: reduce)');
+  function transition(sens, maj){
+    if (!document.startViewTransition || sobre.matches || document.hidden) return maj();
+    document.documentElement.dataset.sens = sens;
+    const t = document.startViewTransition(maj);
+    t.finished.finally(() => { delete document.documentElement.dataset.sens; });
+  }
 
   // Les articles déjà ouverts sont estompés : sur plusieurs jours d'archive, c'est
   // ce qui distingue le nouveau du déjà-vu.
   const CLE = 'veille-lus';
-  let lus = new Set(JSON.parse(localStorage.getItem(CLE) || '[]'));
-  const marquer = url => {
-    lus.add(url);
-    localStorage.setItem(CLE, JSON.stringify([...lus].slice(-4000)));
+  let lus = new Set();
+  try { lus = new Set(JSON.parse(localStorage.getItem(CLE) || '[]')); } catch (e) {}
+  const ecrireLus = () => {
+    try { localStorage.setItem(CLE, JSON.stringify([...lus].slice(-4000))); } catch (e) {}
   };
+  const marquer = url => { lus.add(url); ecrireLus(); };
+  const demarquer = url => { lus.delete(url); ecrireLus(); };
 
   // ---- reprise de lecture ----
   // La première question du lecteur quotidien est « qu'est-ce que j'ai raté ? ». La
@@ -163,10 +178,27 @@
   const SEMAINES = D.semaines || [];
   let semaineActive = 0;
 
+  // Tendances ne lit que ce que la page publique porte déjà : elle y a sa place.
   const VUES = D.public
-    ? {veille:'Veille'}
-    : {veille:'Veille', semaine:'Semaine', signets:'Mes signets', favoris:'Favoris'};
+    ? {veille:'Veille', tendances:'Tendances'}
+    : {veille:'Veille', semaine:'Semaine', tendances:'Tendances', signets:'Signets', favoris:'Favoris'};
+  // Les icônes ne s'affichent que dans la barre d'onglets du bas, sur téléphone : à
+  // cette largeur, un nom seul se lit mal sous le pouce. Tracés au trait, 24 unités.
+  const trace = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"`
+    + ` stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICONES = {
+    veille: trace('<path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>'),
+    semaine: trace('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h3M13.5 14h3"/>'),
+    tendances: trace('<path d="M3.5 19.5h17"/><path d="M5 15l4.5-5 3.5 3 6-7"/><path d="M15 6h4v4"/>'),
+    signets: trace('<path d="M7 3.5h10a1 1 0 0 1 1 1v16l-6-4-6 4v-16a1 1 0 0 1 1-1z"/>'),
+    favoris: trace('<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>'),
+  };
   const estSignet = i => i.categorie === 'signets';
+
+  // Masquer les lus fait de la journée une liste qui se vide à mesure qu'on la lit.
+  // Le choix est retenu d'une visite à l'autre, dans ce navigateur seulement.
+  let masquerLus = false;
+  try { masquerLus = localStorage.getItem('veille-masquer-lus') === '1'; } catch (e) {}
 
   // Voies cumulatives : « + Utile » contient l'essentiel, et laisse passer les items
   // non notés — une archive antérieure au scoring ne doit pas disparaître en silence.
@@ -204,19 +236,53 @@
 
   // Déclaré ici, avec la portée, plutôt qu'à côté de `sujetOk` : les compteurs des
   // filtres s'en servent, et ils sont calculés dès l'initialisation.
-  const texteOk = i =>
-    !requete || [i.titre, i.source_nom, i.extrait, i.phrase, i.analyse, i.justification]
-      .join(' ').toLowerCase().includes(requete);
+  //
+  // La recherche ignore les accents et la casse, et chaque mot est cherché pour
+  // lui-même : « resume claude » trouve « Claude … résumé », là où l'ancienne
+  // recherche exigeait la phrase exacte, accents compris. Le texte replié de chaque
+  // élément est calculé une fois : la page compte huit fois par frappe.
+  const plier = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  let termes = [];
+  const replie = new WeakMap();
+  const texteDe = i => {
+    let t = replie.get(i);
+    if (t === undefined) {
+      t = plier([i.titre, i.source_nom, i.extrait, i.phrase, i.analyse, i.justification].join(' '));
+      replie.set(i, t);
+    }
+    return t;
+  };
+  const texteOk = i => !termes.length || termes.every(m => texteDe(i).includes(m));
+
+  // Le surlignage travaille sur le texte brut, avant échappement : chercher dans du
+  // HTML échappé aurait surligné « amp » au milieu d'un &amp;. Chaque lettre admet
+  // ses variantes accentuées, pour surligner « résumé » quand on a tapé « resume ».
+  const VARIANTES = {a:'aàâä', c:'cç', e:'eéèêë', i:'iîï', o:'oôö', u:'uùûü', y:'yÿ'};
+  let motif = null;
+  const construireMotif = () => {
+    motif = termes.length ? new RegExp('(' + termes.map(m => [...m].map(c =>
+      VARIANTES[c] ? `[${VARIANTES[c]}]` : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(''))
+      .sort((a, b) => b.length - a.length).join('|') + ')', 'gi') : null;
+  };
+  const surligner = s => {
+    const brut = String(s || '');
+    if (!motif) return echapper(brut);
+    return brut.split(motif).map((morceau, k) =>
+      k % 2 ? `<mark>${echapper(morceau)}</mark>` : echapper(morceau)).join('');
+  };
 
   const tous = D.jours.flatMap(j => j.items);
   const parUrl = new Map(tous.map(i => [i.url, i]));
   // Les favoris ne sont pas un sous-ensemble de la page : certains n'y sont plus.
   // Le lot suit la journée affichée, sans quoi les compteurs des filtres annonceraient
   // l'archive entière au-dessus d'une liste qui ne montre qu'un jour.
+  // Les lus masqués sortent du lot lui-même, et donc des compteurs : la règle vaut
+  // toujours, un nombre décrit la liste qu'il surplombe.
   const lot = () => (vue === 'favoris'
     ? listeFavoris()
     : joursAffiches().flatMap(j => j.items)
         .filter(i => estSignet(i) === (vue === 'signets'))
+        .filter(i => !(masquerLus && vue === 'veille' && lus.has(i.url)))
   ).filter(texteOk);
 
   // Règle unique : un compteur décrit la liste qu'il surplombe. Tous se lisent donc
@@ -234,11 +300,14 @@
 
   function rendreOnglets(){
     onglets.innerHTML = Object.entries(VUES).map(([c, nom]) => {
-      const n = c === 'favoris' ? listeFavoris().length
+      // Tendances n'est pas une collection : un nombre n'y compterait rien.
+      const n = c === 'tendances' ? null
+        : c === 'favoris' ? listeFavoris().length
         : c === 'semaine' ? SEMAINES.length
         : tous.filter(i => estSignet(i) === (c === 'signets')).length;
       return `<button class="onglet" role="tab" data-vue="${c}" aria-selected="${c === vue}">`
-        + `${nom}<span class="n">${n}</span></button>`;
+        + `${ICONES[c] || ''}<span>${nom}</span>`
+        + (n === null ? '' : `<span class="n">${n}</span>`) + `</button>`;
     }).join('');
   }
 
@@ -265,27 +334,38 @@
   rendreVoies();
   rendreSujets();
 
+  // Changer de vue, que ce soit par l'onglet, le clavier ou un renvoi d'une autre vue.
+  function changerVue(nouvelle, apres){
+    if (!VUES[nouvelle]) return;
+    transition('', () => {
+      vue = nouvelle;
+      curseur = -1;
+      if (VOIX) speechSynthesis.cancel();
+      // La voie disparaît hors de la veille, et pour la même raison dans les deux
+      // cas : un signet comme un favori sont des choix que j'ai faits moi-même, ce
+      // n'est pas au score de décider de les masquer. Le sujet, lui, reste utile dans
+      // les favoris, qui mélangent actualités et signets ; il n'en a aucun dans
+      // l'onglet signets, où tout est de la même catégorie.
+      const veille = vue === 'veille';
+      // Filtrer ou trier une synthèse rédigée, ou des tendances, n'a aucun sens : les
+      // contrôles disparaissent au lieu de rester là sans effet.
+      const lecture = vue === 'semaine' || vue === 'tendances';
+      barreVoies.hidden = !veille;
+      barre.hidden = vue === 'signets' || lecture;
+      champ.hidden = lecture;
+      selecteurTri.hidden = lecture;
+      boutonSauver.hidden = (LOCAL && !envoiKO) || vue !== 'favoris';
+      if (!veille) { voie = 'tout'; filtre = 'tout'; }
+      else if (voie === 'tout' && D.notes) voie = 'utile';
+      rendreOnglets();
+      if (apres) apres();
+      else { rendreVoies(); rendreSujets(); rendre(); window.scrollTo(0, 0); }
+    });
+  }
+
   onglets.addEventListener('click', e => {
     const b = e.target.closest('.onglet');
-    if (!b || b.dataset.vue === vue) return;
-    vue = b.dataset.vue;
-    // La voie disparaît hors de la veille, et pour la même raison dans les deux cas :
-    // un signet comme un favori sont des choix que j'ai faits moi-même, ce n'est pas
-    // au score de décider de les masquer. Le sujet, lui, reste utile dans les favoris,
-    // qui mélangent actualités et signets ; il n'en a aucun dans l'onglet signets, où
-    // tout est de la même catégorie.
-    const veille = vue === 'veille';
-    const hebdo = vue === 'semaine';
-    barreVoies.hidden = !veille;
-    barre.hidden = vue === 'signets' || hebdo;
-    // Filtrer ou trier une synthèse rédigée n'a aucun sens : les contrôles disparaissent
-    // au lieu de rester là sans effet.
-    champ.hidden = hebdo;
-    selecteurTri.hidden = hebdo;
-    boutonSauver.hidden = (LOCAL && !envoiKO) || vue !== 'favoris';
-    if (!veille) { voie = 'tout'; filtre = 'tout'; }
-    else if (voie === 'tout' && D.notes) voie = 'utile';
-    rendreOnglets(); rendreVoies(); rendreSujets(); rendre();
+    if (b && b.dataset.vue !== vue) changerVue(b.dataset.vue);
   });
 
   barreVoies.addEventListener('click', e => {
@@ -308,7 +388,10 @@
   });
 
   champ.addEventListener('input', () => {
-    requete = champ.value.toLowerCase().trim();
+    requete = champ.value.trim();
+    termes = plier(requete).split(/\s+/).filter(Boolean);
+    construireMotif();
+    curseur = -1;
     // Saisir un mot change à la fois la portée — la journée cède la place à l'archive
     // entière — et le décompte de chaque voie. Les deux rangées sont donc redessinées.
     rendreVoies(); rendreSujets(); rendre();
@@ -379,7 +462,7 @@
     const q = dateComplete(i.date);
     return `<details class="item signet${i.prioritaire ? ' prio' : ''}${lus.has(i.url) ? ' lu' : ''}"`
       + ` data-url="${echapper(i.url)}"><summary>`
-      + `<span class="t">${echapper(i.titre)}</span>`
+      + `<span class="t">${surligner(i.titre)}</span>`
       + `<span class="ligne"><span class="src">${echapper(i.source_nom)}</span>`
       + (estNouveau(i) ? `<span class="neuf">nouveau</span>` : '')
       + (q ? `<span>${q}</span>` : '')
@@ -443,7 +526,7 @@
         ? `<span class="score ${i.voie}" title="Intérêt estimé pour ce site, de 0 à 1">${i.score.toFixed(2)}</span>`
         : `<span class="score vide" title="Élément antérieur au scoring">—</span>`)
       + `<div class="corps-item">`
-      + `<h3>${echapper(i.titre)}</h3>`
+      + `<h3>${surligner(i.titre)}</h3>`
       + `<div class="ligne"><span class="src">${echapper(i.source_nom)}</span>`
       + (estNouveau(i) ? `<span class="neuf">nouveau</span>` : '')
       + (h ? `<span>${h}</span>` : '')
@@ -460,7 +543,7 @@
         ? `<span class="aussi">aussi : ${echapper(i.aussi.join(', '))}</span>` : '')
       + `</div>`
       + (i.phrase || i.extrait
-        ? `<p class="extrait">${echapper(i.phrase || i.extrait)}</p>`
+        ? `<p class="extrait">${surligner(i.phrase || i.extrait)}</p>`
         : '')
       + `</div></a>`;
   }
@@ -534,15 +617,26 @@
   const allerA = date => {
     jourActif = date;
     if (date !== null) dernierJour = date;
+    curseur = -1;
+    dernierLot = null;
+    if (VOIX) speechSynthesis.cancel();
     fermerCalendrier();
     // Les nombres des deux rangées de filtres viennent de changer avec la journée.
     rendreVoies(); rendreSujets(); rendre();
     window.scrollTo(0, 0);
   };
 
+  // Le sens du glissement suit le temps : reculer d'un jour pousse la liste vers la
+  // droite, comme une page qu'on tourne vers le passé.
+  const allerAvecSens = date => {
+    if (date === jourActif) return fermerCalendrier();
+    const sens = (jourActif && date && date < jourActif) ? 'passe' : 'futur';
+    transition(sens, () => allerA(date));
+  };
+
   const decaler = n => {
     const i = DATES.indexOf(jourActif) + n;
-    if (i >= 0 && i < DATES.length) allerA(DATES[i]);
+    if (i >= 0 && i < DATES.length) allerAvecSens(DATES[i]);
   };
 
   function fermerCalendrier(){
@@ -585,7 +679,8 @@
   document.getElementById('suiv').addEventListener('click', () => decaler(-1));
 
   document.getElementById('tousjours').addEventListener('click', () => {
-    allerA(jourActif === null ? (dernierJour || DATES[0] || null) : null);
+    const cible = jourActif === null ? (dernierJour || DATES[0] || null) : null;
+    transition('', () => allerA(cible));
   });
 
   btDate.addEventListener('click', () => {
@@ -606,7 +701,7 @@
       return rendreCalendrier();
     }
     const case_ = e.target.closest('.cal-case.plein');
-    if (case_) allerA(case_.dataset.date);
+    if (case_) allerAvecSens(case_.dataset.date);
   });
 
   document.addEventListener('click', e => {
@@ -614,14 +709,74 @@
       fermerCalendrier();
   });
 
+  // ---- clavier ----
+  // Une journée se trie comme une boîte de réception : j et k passent d'un élément à
+  // l'autre, et une lettre agit sur celui qu'on a choisi. Le curseur n'est qu'une
+  // position dans la liste affichée ; il repart de zéro à chaque nouvelle liste.
+  let curseur = -1;
+  const enveloppes = () => [...flux.querySelectorAll('.enveloppe')];
+  const choisir = n => {
+    const liste = enveloppes();
+    if (!liste.length) return;
+    curseur = Math.max(0, Math.min(liste.length - 1, n));
+    liste.forEach((el, k) => el.classList.toggle('curseur', k === curseur));
+    liste[curseur].scrollIntoView({block: 'nearest', behavior: sobre.matches ? 'auto' : 'smooth'});
+  };
+  const choisi = () => (curseur >= 0 ? enveloppes()[curseur] : null) || null;
+
+  function agirSur(el, touche){
+    const url = (el.querySelector('[data-url]') || {}).dataset?.url;
+    if (touche === 'o' || touche === 'Enter') {
+      const lien = el.querySelector('a.item');
+      if (lien) return lien.click();       // passe par le même chemin qu'un clic : marqué lu
+      const signet = el.querySelector('details.signet');
+      if (signet) signet.open = !signet.open;
+      return;
+    }
+    if (touche === 'd') return el.querySelector('.developper')?.click();
+    if (touche === 's') return el.querySelector('.etoile')?.click();
+    if (touche === 'c') return el.querySelector('.lien-ancre')?.click();
+    if (touche === 'm' && url) {
+      if (lus.has(url)) demarquer(url); else marquer(url);
+      el.querySelector('.item')?.classList.toggle('lu', lus.has(url));
+      rendreLecture();
+    }
+  }
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !calendrier.hidden) return fermerCalendrier();
-    // Les flèches appartiennent au champ de saisie tant qu'on y écrit. `closest`
-    // n'existe que sur un Element : la cible d'un keydown peut être le document.
-    if (e.target instanceof Element && e.target.closest('input, select, textarea')) return;
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    const recule = e.key === 'ArrowLeft';
+    // Les touches appartiennent au champ de saisie tant qu'on y écrit ; Échap l'en fait
+    // sortir. `closest` n'existe que sur un Element : la cible peut être le document.
+    if (e.target instanceof Element && e.target.closest('input, select, textarea')) {
+      if (e.key === 'Escape' && e.target === champ) champ.blur();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey || aide.open) return;
+    const k = e.key;
+
+    if (k === '?') { e.preventDefault(); return aide.showModal(); }
+    if (k === '/' && !champ.hidden) { e.preventDefault(); champ.focus(); return champ.select(); }
+    if (/^[1-9]$/.test(k)) {
+      const cible = Object.keys(VUES)[Number(k) - 1];
+      if (cible && cible !== vue) changerVue(cible);
+      return;
+    }
+    if (k === 't' && vue === 'veille' && DATES.length && jourActif !== DATES[0]) {
+      return allerAvecSens(DATES[0]);
+    }
+    if (k === 'j' || k === 'k') {
+      e.preventDefault();
+      return choisir(curseur < 0 ? 0 : curseur + (k === 'j' ? 1 : -1));
+    }
+    // Entrée n'est à nous que si rien n'a le focus : sur un bouton, elle l'active.
+    const el = choisi();
+    if (el && 'odscm'.includes(k) || (el && k === 'Enter' && e.target === document.body)) {
+      e.preventDefault();
+      return agirSur(el, k);
+    }
+
+    if (k !== 'ArrowLeft' && k !== 'ArrowRight') return;
+    const recule = k === 'ArrowLeft';
     if (vue === 'semaine') {
       e.preventDefault();
       return allerASemaine(semaineActive + (recule ? 1 : -1));
@@ -630,6 +785,28 @@
     e.preventDefault();
     decaler(recule ? 1 : -1);
   });
+
+  // ---- balayage, sur écran tactile ----
+  // Le geste d'un téléphone pour « page suivante ». Un balayage franchement
+  // horizontal seulement : un défilement légèrement penché ne doit pas changer de
+  // jour, ni un glissement dans une rangée de filtres ou un bloc de code.
+  let toucher = null;
+  flux.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    toucher = (e.touches.length === 1 && !e.target.closest('pre, .defile, .rythme, .pistes'))
+      ? {x: t.clientX, y: t.clientY, quand: Date.now()} : null;
+  }, {passive: true});
+  flux.addEventListener('touchend', e => {
+    if (!toucher) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - toucher.x, dy = t.clientY - toucher.y;
+    const vif = Date.now() - toucher.quand < 600;
+    toucher = null;
+    if (!vif || Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.5) return;
+    const recule = dx > 0;       // le doigt part vers la droite : on remonte le temps
+    if (vue === 'semaine') return allerASemaine(semaineActive + (recule ? 1 : -1));
+    if (vue === 'veille' && !surToutLArchive()) decaler(recule ? 1 : -1);
+  }, {passive: true});
 
   // ---- navigation hebdomadaire ----------------------------------------------
   // Même barre que pour les jours, mais une liste plutôt qu'un calendrier : une
@@ -655,11 +832,15 @@
   }
 
   const allerASemaine = i => {
-    if (i < 0 || i >= SEMAINES.length) return;
-    semaineActive = i;
-    fermerListeSemaines();
-    rendre();
-    window.scrollTo(0, 0);
+    if (i < 0 || i >= SEMAINES.length || i === semaineActive) return fermerListeSemaines();
+    // Les semaines sont rangées de la plus récente à la plus ancienne : un indice
+    // plus grand remonte le temps.
+    transition(i > semaineActive ? 'passe' : 'futur', () => {
+      semaineActive = i;
+      fermerListeSemaines();
+      rendre();
+      window.scrollTo(0, 0);
+    });
   };
 
   document.getElementById('sem-prec').addEventListener('click', () => allerASemaine(semaineActive + 1));
@@ -686,28 +867,82 @@
 
   // Un renvoi du digest hebdo vers une journée bascule sur elle, dans l'onglet Veille.
   // C'est ce qui relie les deux vues : la synthèse dit quoi, la journée montre d'où.
+  // Les colonnes de la semaine et du rythme des Tendances font de même.
   flux.addEventListener('click', e => {
-    const b = e.target instanceof Element && e.target.closest('.lien-jour');
-    if (!b || b.disabled) return;
-    vue = 'veille';
-    barreVoies.hidden = false;
-    barre.hidden = false;
-    champ.hidden = false;
-    selecteurTri.hidden = false;
-    boutonSauver.hidden = true;
-    rendreOnglets();
-    allerA(b.dataset.date);
+    const b = e.target instanceof Element && e.target.closest('.lien-jour, .jour-barre, .r-jour');
+    if (!b || b.disabled || !PAR_DATE.has(b.dataset.date)) return;
+    changerVue('veille', () => allerA(b.dataset.date));
   });
+
+  // Les dates d'un intervalle, du premier au dernier jour inclus, en AAAA-MM-JJ.
+  const joursEntre = (debut, fin) => {
+    const sortie = [];
+    const [a, m, j] = debut.split('-').map(Number);
+    for (let d = new Date(a, m - 1, j); ; d.setDate(d.getDate() + 1)) {
+      const cle = cleDate(d.getFullYear(), d.getMonth(), d.getDate());
+      if (cle > fin || sortie.length > 400) break;
+      sortie.push(cle);
+    }
+    return sortie;
+  };
+
+  // Le poids d'une journée, par voie. Les signets n'en font pas partie : ils ne sont
+  // pas une production du jour, mais un relevé de mes propres choix.
+  const bilan = j => {
+    const items = j ? j.items.filter(i => !estSignet(i)) : [];
+    const ess = items.filter(i => i.voie === 'essentiel').length;
+    const bruit = items.filter(i => i.voie === 'bruit').length;
+    return {total: items.length, ess, utile: items.length - ess - bruit, bruit, items};
+  };
+
+  // ---- la semaine d'un coup d'œil ----
+  // Sept colonnes au-dessus de la synthèse : ce que chaque journée a pesé et ce qu'elle
+  // a porté d'essentiel. Un jour sans édition — un run tombé — se voit comme un trou,
+  // au lieu de passer pour une journée calme.
+  function coupDOeil(s){
+    if (!s.debut || !s.fin) return '';
+    const jours = joursEntre(s.debut, s.fin).map(d => ({date: d, b: bilan(PAR_DATE.get(d)), la: PAR_DATE.has(d)}));
+    const max = Math.max(1, ...jours.map(x => x.b.ess + x.b.utile));
+    const noms = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+    const somme = cle => jours.reduce((n, x) => n + x.b[cle], 0);
+    const versions = jours.flatMap(x => x.b.items.filter(i => i.version));
+    const manquants = jours.filter(x => !x.la).length;
+    return `<div class="coup-doeil" role="group" aria-label="La semaine jour par jour">`
+      + jours.map((x, k) => {
+        const h = v => `${(v / max * 100).toFixed(1)}%`;
+        const titre = x.la
+          ? `${libelleCourt(x.date)} — ${x.b.ess + x.b.utile} éléments, dont ${x.b.ess} essentiel${x.b.ess > 1 ? 's' : ''}`
+          : `${libelleCourt(x.date)} — pas d'édition ce jour-là`;
+        return `<button class="jour-barre" data-date="${x.date}" title="${titre}"${x.la ? '' : ' disabled'}>`
+          + `<span class="jb-colonne">`
+          + (x.b.ess ? `<i class="jb-ess" style="height:${h(x.b.ess)}"></i>` : '')
+          + (x.b.utile ? `<i class="jb-utile" style="height:${h(x.b.utile)}"></i>` : '')
+          + `</span><span class="jb-nom">${noms[k]}</span>`
+          + `<span class="jb-n">${x.la ? x.b.ess + x.b.utile : '—'}</span></button>`;
+      }).join('')
+      + `</div><p class="legende">`
+      + `<span><span class="pastille ess"></span><b>${somme('ess')}</b> essentiels</span>`
+      + `<span><span class="pastille utile"></span><b>${somme('utile')}</b> utiles</span>`
+      + (versions.length ? `<span><b>${versions.length}</b> version${versions.length > 1 ? 's' : ''} publiée${versions.length > 1 ? 's' : ''}</span>` : '')
+      + (manquants ? `<span>${manquants} jour${manquants > 1 ? 's' : ''} sans édition</span>` : '')
+      + `</p>`;
+  }
+
+  // « mardi 22 sept. » : assez pour se repérer dans une infobulle ou une légende.
+  const libelleCourt = date => {
+    const [a, m, j] = date.split('-').map(Number);
+    return new Date(a, m - 1, j).toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'short'});
+  };
 
   function rendreSemaine(){
     if (!SEMAINES.length) {
-      flux.innerHTML = `<p class="vide">Aucun digest hebdomadaire pour l'instant.<br><br>`
+      flux.innerHTML = `<p class="vide">${DESSIN_VIDE}Aucun digest hebdomadaire pour l'instant.<br><br>`
         + `Le premier est écrit le lundi matin qui suit une semaine complète, `
         + `ou à la demande avec <code>python .veille/run_weekly.py</code>.</p>`;
       return resumer(0, 'rien à lire', 'semaine');
     }
     const s = SEMAINES[semaineActive];
-    flux.innerHTML = `<section class="jour hebdo"><div class="corps">${s.html}</div></section>`;
+    flux.innerHTML = `<section class="jour hebdo">${coupDOeil(s)}<div class="corps">${s.html}</div></section>`;
     // Une journée sortie de la fenêtre d'affichage n'est plus atteignable : le renvoi
     // reste lisible, mais cesse d'être un bouton qui ne mènerait nulle part.
     flux.querySelectorAll('.lien-jour').forEach(b => {
@@ -727,7 +962,9 @@
     // quand on change de voie ou de sujet, sinon il perdrait son rôle de repère.
     const jours = joursAffiches();
     const items = jours.flatMap(j => j.items).filter(i => !estSignet(i));
-    if (vue !== 'veille' || !items.length) { rail.hidden = true; return; }
+    // Pendant une recherche, il n'y a plus de journée à décrire : les versions de
+    // tout l'archive, sans rapport avec le mot cherché, ne seraient que du bruit.
+    if (vue !== 'veille' || requete || !items.length) { rail.hidden = true; return; }
 
     const versions = items.filter(i => i.version).slice(0, 8);
     const sources = [...items.reduce((m, i) => m.set(i.source_nom, (m.get(i.source_nom) || 0) + 1), new Map())]
@@ -748,14 +985,452 @@
     rail.hidden = false;
   }
 
+  // La marque du site, au repos, au-dessus des pages vides : un radar qui n'a rien vu.
+  const DESSIN_VIDE = `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">`
+    + `<circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="16" stroke-dasharray="2 4"/>`
+    + `<path d="M32 32V6" stroke-linecap="round"/><circle cx="32" cy="32" r="3" fill="currentColor"/></svg>`;
+
+  // ---- thème ----
+  // Trois états, dans l'ordre où on les parcourt : celui du système, clair, sombre.
+  // Le choix est posé sur <html> avant même la feuille de style (voir page.html).
+  const boutonTheme = document.getElementById('theme');
+  const ICONES_THEME = {
+    auto: trace('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>'),
+    light: trace('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
+    dark: trace('<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>'),
+  };
+  const NOMS_THEME = {auto: 'Thème du système', light: 'Thème clair', dark: 'Thème sombre'};
+  const themeCourant = () => document.documentElement.dataset.theme || 'auto';
+  function rendreTheme(){
+    const t = themeCourant();
+    boutonTheme.innerHTML = ICONES_THEME[t];
+    boutonTheme.title = `${NOMS_THEME[t]} — cliquer pour changer`;
+    boutonTheme.setAttribute('aria-label', `${NOMS_THEME[t]}. Changer de thème`);
+  }
+  boutonTheme.addEventListener('click', () => {
+    const suite = {auto: 'light', light: 'dark', dark: 'auto'}[themeCourant()];
+    transition('', () => {
+      if (suite === 'auto') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = suite;
+      rendreTheme();
+    });
+    try {
+      if (suite === 'auto') localStorage.removeItem('veille-theme');
+      else localStorage.setItem('veille-theme', suite);
+    } catch (e) {}
+  });
+  rendreTheme();
+
+  // ---- aide clavier ----
+  const aide = document.getElementById('aide');
+  document.getElementById('aide-bt').addEventListener('click', () => aide.showModal());
+  // L'aide ne décrit que ce que la page offre : pas de favoris sur le site public.
+  document.getElementById('nb-onglets').textContent = Object.keys(VUES).length;
+  if (PUBLIC) aide.querySelectorAll('.prive').forEach(n => n.remove());
+  // Un clic sur le fond, hors de la boîte, la referme.
+  aide.addEventListener('click', e => { if (e.target === aide) aide.close(); });
+
+  // ---- onglet Tendances ------------------------------------------------------
+  // Ce que la lecture jour après jour ne montre pas : le rythme de l'actualité, les
+  // sujets qui prennent de la place, la cadence des versions, et ce que rapporte
+  // chaque source. Tout se calcule ici, à partir des journées que la page porte déjà.
+  const nf = new Intl.NumberFormat('fr-FR');
+  const lissage = (v, r = 1) => v.map((_, k) => {
+    const f = v.slice(Math.max(0, k - r), k + r + 1);
+    return f.reduce((a, b) => a + b, 0) / f.length;
+  });
+
+  // Une courbe de quatre semaines, dessinée au trait. La zone teintée à droite est la
+  // dernière semaine — celle qu'on compare au reste.
+  function courbe(valeurs, {l = 96, h = 26, recents = 0} = {}){
+    const max = Math.max(1e-9, ...valeurs);
+    const pas = valeurs.length > 1 ? l / (valeurs.length - 1) : l;
+    const pts = valeurs.map((v, k) => [k * pas, h - 2 - (v / max) * (h - 5)]);
+    const d = pts.map((p, k) => (k ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+    const zone = recents
+      ? `<rect class="recent" x="${(l - pas * (recents - 0.5)).toFixed(1)}" y="0" width="${(pas * (recents - 0.5)).toFixed(1)}" height="${h}"/>` : '';
+    const fin = pts[pts.length - 1];
+    return `<svg class="spark" viewBox="0 0 ${l} ${h}" aria-hidden="true">${zone}`
+      + `<path class="aire" d="${d}L${l} ${h}L0 ${h}Z"/><path class="ligne-s" d="${d}"/>`
+      + `<circle class="fin" cx="${fin[0].toFixed(1)}" cy="${fin[1].toFixed(1)}" r="2.2"/></svg>`;
+  }
+
+  // Les repères de mois sous un axe de dates. `bornes` : les points sont-ils posés aux
+  // extrémités (une piste) ou au début de chaque colonne (un histogramme) ?
+  function axeMois(dates, bornes){
+    const n = bornes ? Math.max(1, dates.length - 1) : dates.length;
+    const debutMois = dates.map((d, k) => d.endsWith('-01') ? k : -1).filter(k => k > 0);
+    const place = k => `left:${(k / n * 100).toFixed(2)}%`;
+    const date = (d, opts) => {
+      const [a, m, j] = d.split('-').map(Number);
+      return new Date(a, m - 1, j).toLocaleDateString('fr-FR', opts);
+    };
+    // Le premier jour n'a d'étiquette que s'il laisse la place au premier mois entier.
+    const premier = (!debutMois.length || debutMois[0] > dates.length * 0.14)
+      ? `<span style="${place(0)}">${date(dates[0], {day: 'numeric', month: 'short'})}</span>` : '';
+    return premier + debutMois.map(k => `<span style="${place(k)}">${date(dates[k], {month: 'long'})}</span>`).join('');
+  }
+
+  // Les mots vides, en anglais et en français, et ceux qui ne disent rien dans une
+  // veille sur l'IA parce qu'ils sont partout : « model », « release », « ai ».
+  const MOTS_VIDES = new Set((
+    'the and for with from that this you your are was were how what why when who can will not but all '
+    + 'new now its has have had into out our via using use used just more than about over get got one two '
+    + 'three any some they their them his her like make made does did been being also only most very here '
+    + 'there which while where would could should after before first best better per off own day days '
+    + 'week today year years time ways way thing things want need lot back still even really much many '
+    + 'other every each onto show ask tell let say says said open source release released releases update '
+    + 'updates updated version versions available introducing introduces announcing announced launch '
+    + 'launches launched run running runs based model models llm llms ai new news post blog article '
+    + 'guide learn learning build building built work working works help helps look looks looking free '
+    + 'fast faster big good great part next last long better within without between across through '
+    + 'toward towards against around under again why yet own may might must i\'m it\'s don\'t can\'t '
+    + 'les des une pour avec dans sur par est sont qui que quoi aux ses son leur leurs plus pas cette '
+    + 'ces cet comme mais donc elle ils nous vous tout tous toute toutes entre sans sous vers chez afin '
+    + 'ainsi lors peut fait faire etre avoir nouveau nouvelle nouveaux nouvelles permet grace deux trois '
+    + 'modele modeles outil outils mise jour jours semaine annonce annonces lance sortie ia '
+    + 'using vs pr hn re de la le et en au du un ou a l d s t'
+  ).split(/\s+/));
+
+  // Les mots d'un titre, accents retirés, avec une marque : le mot portait-il une
+  // majuscule ou un chiffre ailleurs qu'en tête de titre ? C'est la trace d'un nom
+  // propre — Opus, Mica, GPT-6 — là où « trained » ou « decision » ne sont que de
+  // l'anglais courant, qui monte et descend sans rien signifier.
+  //
+  // Un titre « En Capitales À Chaque Mot », à l'anglo-saxonne, ne dit rien de ses noms
+  // propres : ses majuscules n'y sont pas comptées.
+  const motsDe = titre => {
+    const bruts = [...String(titre || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .matchAll(/[A-Za-z0-9][A-Za-z0-9+#.\-]*[A-Za-z0-9+#]|[A-Za-z0-9]/g)].map(r => r[0].replace(/\.+$/, ''));
+    const longs = bruts.filter(b => b.length > 3);
+    const capitales = longs.length >= 3 && longs.filter(b => /^[A-Z]/.test(b)).length / longs.length >= 0.7;
+    return bruts.map((brut, k) => {
+      // Pluriel simple ramené au singulier, pour ne pas compter « agents » et
+      // « agent » comme deux sujets. Les mots en -ss (« class ») sont épargnés.
+      let m = brut.toLowerCase();
+      if (m.length >= 5 && m.endsWith('s') && !m.endsWith('ss') && !/\d/.test(m)) m = m.slice(0, -1);
+      return {m, propre: /\d/.test(brut) || (!capitales && k > 0 && /^[A-Z]/.test(brut))};
+    });
+  };
+  const motUtile = m => m.length >= 3 && !MOTS_VIDES.has(m) && !MOTS_VIDES.has(m + 's')
+    && !/^v?\d[\d.\-x]*$/.test(m) && !/^\d+(k|m|b|gb|mb|tb|ms|s|x|%)?$/.test(m);
+
+  // Les termes d'un titre : ses mots utiles, et ses paires de mots utiles adjacents —
+  // « claude code » dit autre chose que « claude » et « code » pris séparément.
+  // Renvoie terme -> vrai si l'occurrence a l'allure d'un nom propre.
+  function termesDe(titre){
+    const mots = motsDe(titre);
+    const sortie = new Map();
+    mots.forEach(({m, propre}, k) => {
+      if (!motUtile(m)) return;
+      sortie.set(m, (sortie.get(m) || false) || propre);
+      const suivant = mots[k + 1];
+      if (suivant && motUtile(suivant.m)) sortie.set(m + ' ' + suivant.m, true);
+    });
+    return sortie;
+  }
+
+  function rendreTendances(){
+    const chrono = [...D.jours].reverse();                 // du plus ancien au plus récent
+    if (!chrono.length) {
+      flux.innerHTML = `<p class="vide">${DESSIN_VIDE}Pas encore d'archive à analyser.</p>`;
+      return resumer(0, VUES.tendances);
+    }
+    const dates = joursEntre(chrono[0].date, chrono[chrono.length - 1].date);
+    const dernier = dates[dates.length - 1];
+    const items = chrono.flatMap(j => j.items.filter(i => !estSignet(i)).map(i => ({i, date: j.date})));
+    const essentiels = items.filter(x => x.i.voie === 'essentiel');
+    const versions = items.filter(x => x.i.version);
+    const absents = dates.filter(d => !PAR_DATE.has(d));
+
+    // Les quatre dernières semaines servent de fenêtre aux courbes, et la dernière est
+    // comparée aux trois précédentes. Les jours sans édition ne comptent pas : ils
+    // feraient passer une panne pour une accalmie.
+    const fenetre = dates.slice(-28);
+    const recents = new Set(fenetre.slice(-7));
+    const nRecents = fenetre.slice(-7).filter(d => PAR_DATE.has(d)).length || 1;
+    const nAvant = fenetre.slice(0, -7).filter(d => PAR_DATE.has(d)).length || 1;
+    const indexFenetre = new Map(fenetre.map((d, k) => [d, k]));
+
+    const html = [];
+
+    // -- les chiffres
+    const claudeEss = essentiels.filter(x => x.i.prioritaire).length;
+    const sourcesRecentes = new Set(items.filter(x => recents.has(x.date)).map(x => x.i.source_nom));
+    html.push(`<div class="chiffres">`
+      + chiffre(nf.format(items.length), 'éléments collectés')
+      + chiffre(nf.format(essentiels.length), 'essentiels', true)
+      + chiffre(essentiels.length ? Math.round(claudeEss / essentiels.length * 100) + ' %' : '—', 'de l\'essentiel sur Claude')
+      + chiffre(nf.format(versions.length), 'versions publiées')
+      + chiffre(nf.format(sourcesRecentes.size), 'sources actives en 7 jours')
+      + chiffre(nf.format(absents.length), absents.length > 1 ? 'jours sans édition' : 'jour sans édition')
+      + `</div>`);
+
+    // -- le rythme
+    const bilans = dates.map(d => ({d, b: bilan(PAR_DATE.get(d)), la: PAR_DATE.has(d)}));
+    const max = Math.max(1, ...bilans.map(x => x.b.total));
+    const moyenne = items.length / Math.max(1, dates.length - absents.length);
+    const record = bilans.reduce((a, x) => x.b.total > a.b.total ? x : a, bilans[0]);
+    html.push(section('Le rythme',
+      `Une colonne par journée : l'essentiel en bas, puis l'utile, puis le bruit. `
+      + `Un clic ouvre la journée.`,
+      `<div class="rythme" role="group" aria-label="Éléments par journée">`
+      + bilans.map(x => {
+        const h = v => `height:${(v / max * 100).toFixed(2)}%`;
+        if (!x.la) {
+          return `<span class="r-jour absent" data-info="${echapper(libelleCourt(x.d))} — pas d'édition"></span>`;
+        }
+        const info = `${libelleCourt(x.d)} — ${x.b.total} éléments · ${x.b.ess} essentiel${x.b.ess > 1 ? 's' : ''} · ${x.b.utile} utile${x.b.utile > 1 ? 's' : ''}`;
+        return `<button class="r-jour" data-date="${x.d}" data-info="${echapper(info)}" aria-label="${echapper(info)}"`
+          + `${x.d === jourActif ? ' aria-current="date"' : ''}>`
+          + `<i class="r-ess" style="${h(x.b.ess)}"></i><i class="r-utile" style="${h(x.b.utile)}"></i>`
+          + `<i class="r-bruit" style="${h(x.b.bruit)}"></i></button>`;
+      }).join('')
+      + `</div><div class="r-axe">${axeMois(dates, false)}</div>`
+      + `<p class="r-info" aria-live="polite">&nbsp;</p>`
+      + `<p class="legende"><span><span class="pastille ess"></span>essentiel</span>`
+      + `<span><span class="pastille utile"></span>utile</span><span><span class="pastille bruit"></span>bruit</span>`
+      + `<span><b>${nf.format(Math.round(moyenne))}</b> éléments par jour en moyenne</span>`
+      + `<span>record : <b>${record.b.total}</b> le ${echapper(libelleCourt(record.d))}</span></p>`
+      + (absents.length
+        ? `<p class="r-note">Jours sans édition — ${absents.map(d => echapper(libelleCourt(d))).join(', ')} : `
+          + `l'édition suivante a repris ce que sa fenêtre de collecte couvrait encore.</p>`
+        : '')));
+
+    // -- les sujets qui montent
+    const parTerme = new Map();     // terme -> tableau de comptes par jour de la fenêtre
+    const propres = new Map();      // terme -> nombre d'occurrences en nom propre
+    items.forEach(x => {
+      if (x.i.voie === 'bruit' || !indexFenetre.has(x.date)) return;
+      const k = indexFenetre.get(x.date);
+      termesDe(x.i.titre).forEach((propre, t) => {
+        let serie = parTerme.get(t);
+        if (!serie) parTerme.set(t, serie = new Array(fenetre.length).fill(0));
+        serie[k]++;
+        if (propre) propres.set(t, (propres.get(t) || 0) + 1);
+      });
+    });
+    const candidats = [...parTerme].map(([t, serie]) => {
+      const r = serie.slice(-7).reduce((a, b) => a + b, 0);
+      const a = serie.slice(0, -7).reduce((a, b) => a + b, 0);
+      const tauxR = r / nRecents, tauxA = a / nAvant;
+      const total = r + a;
+      return {t, serie, r, a, ratio: (tauxR + 0.1) / (tauxA + 0.1),
+        poids: r * Math.log2((tauxR + 0.1) / (tauxA + 0.1)),
+        propre: (propres.get(t) || 0) / total >= 0.5};
+    // Un mot courant ne passe que s'il monte franchement ; un nom propre ou une paire
+    // de mots, dès trois titres. Un mot presque toujours pris dans la même paire —
+    // « face » dans « hugging face » — laisse la paire concourir à sa place.
+    }).filter(c => c.ratio >= 1.6 && (c.propre ? c.r >= 3 : c.r >= 6))
+      .filter(c => c.t.includes(' ') || ![...parTerme].some(([b, serie]) =>
+        b.includes(' ') && b.split(' ').includes(c.t)
+        && serie.reduce((x, y) => x + y, 0) >= 0.8 * (c.r + c.a)));
+    candidats.sort((x, y) => y.poids - x.poids);
+    // Un mot seul s'efface derrière la paire qui le contient, quand il n'apparaît
+    // guère ailleurs : « code » n'apprend rien à côté de « claude code ».
+    const retenus = [];
+    for (const c of candidats) {
+      if (retenus.length >= 10) break;
+      const couvert = retenus.some(x => (x.t.includes(' ') && x.t.split(' ').includes(c.t) && c.r <= x.r * 1.6)
+        || (c.t.includes(' ') && c.t.split(' ').includes(x.t) && x.r <= c.r * 1.6));
+      // La paire remplace le mot seul déjà retenu qu'elle contient : elle en dit plus.
+      const englobe = retenus.findIndex(x => c.t.includes(' ') && c.t.split(' ').includes(x.t) && x.r <= c.r * 1.6);
+      if (englobe >= 0) { retenus[englobe] = c; continue; }
+      if (!couvert) retenus.push(c);
+    }
+    const constants = [...parTerme].map(([t, serie]) => ({t, total: serie.reduce((a, b) => a + b, 0)}))
+      .filter(c => !c.t.includes(' ') && !retenus.some(x => x.t === c.t))
+      .sort((x, y) => y.total - x.total).slice(0, 8);
+    html.push(section('Les sujets qui montent',
+      `Les mots des titres plus fréquents cette semaine que les trois précédentes, `
+      + `rapportés au nombre de journées. Un clic cherche le terme dans toute l'archive.`,
+      (retenus.length
+        ? `<ol class="termes">` + retenus.map(c =>
+          `<li><button class="terme" data-q="${echapper(c.t)}" title="Chercher « ${echapper(c.t)} »">`
+          + `<span class="t-nom">${echapper(c.t)}</span>`
+          + courbe(lissage(c.serie), {recents: 7})
+          + `<span class="t-n" title="Titres de la dernière semaine">${c.r}</span>`
+          + `<span class="t-var">${c.a ? '×' + (c.ratio).toFixed(1).replace('.', ',') : 'nouveau'}</span>`
+          + `</button></li>`).join('') + `</ol>`
+        : `<p class="t-intro">Rien ne se détache nettement cette semaine.</p>`)
+      + (constants.length
+        ? `<p class="r-note">Toujours présents sur quatre semaines : ` + constants.map(c =>
+          `<button class="lien-jour terme-court" data-q="${echapper(c.t)}">${echapper(c.t)}</button>`).join(' ') + `</p>`
+        : '')));
+
+    // -- les versions
+    const parProduit = new Map();
+    versions.forEach(x => {
+      const nom = x.i.source_nom.replace(/\s*\(releases\)\s*$/i, '');
+      if (!parProduit.has(nom)) parProduit.set(nom, []);
+      parProduit.get(nom).push(x);
+    });
+    const produits = [...parProduit].sort((a, b) => b[1].length - a[1].length).slice(0, 6);
+    const indexDate = new Map(dates.map((d, k) => [d, k]));
+    const place = d => ((indexDate.get(d) || 0) / Math.max(1, dates.length - 1) * 100).toFixed(2);
+    if (produits.length) {
+      html.push(section('La cadence des versions',
+        `Une piste par produit suivi, un point par version publiée. Un clic mène à l'élément.`,
+        `<div class="pistes">` + produits.map(([nom, liste]) => {
+          const jours = new Set(liste.map(x => x.date)).size;
+          const cadence = liste.length > 1
+            ? `une tous les ${(dates.length / liste.length).toFixed(1).replace('.', ',')} j` : '';
+          return `<div class="p-nom">${echapper(nom)}<small>${liste.length} version${liste.length > 1 ? 's' : ''}`
+            + `${cadence ? ' · ' + cadence : ''}</small></div>`
+            + `<div class="p-piste">` + liste.map((x, k) =>
+              `<button class="p-point" data-date="${x.date}" data-ancre="${ancre(x.i.url)}"`
+              // Plusieurs versions le même jour : les points s'écartent en hauteur
+              // plutôt que de s'empiler en un seul.
+              + ` style="left:${place(x.date)}%; --j:${jours < liste.length ? (k % 3) - 1 : 0}"`
+              + ` title="${echapper(x.i.titre)} — ${echapper(libelleCourt(x.date))}"`
+              + ` aria-label="${echapper(nom + ' ' + x.i.titre + ', ' + libelleCourt(x.date))}"></button>`).join('')
+            + `</div>`;
+        }).join('')
+        + `<div class="p-axe">${axeMois(dates, true)}</div></div>`));
+    }
+
+    // -- les sources
+    const parSource = new Map();
+    items.forEach(x => {
+      const nom = x.i.source_nom || '—';
+      if (!parSource.has(nom)) parSource.set(nom, []);
+      parSource.get(nom).push(x);
+    });
+    const joursDepuis = d => Math.round((new Date(dernier) - new Date(d)) / 86400000);
+    const lignes = [...parSource].map(([nom, liste]) => {
+      const notes = liste.filter(x => x.i.score != null);
+      const utiles = liste.filter(x => x.i.voie !== 'bruit').length;
+      const serie = new Array(fenetre.length).fill(0);
+      liste.forEach(x => { if (indexFenetre.has(x.date)) serie[indexFenetre.get(x.date)]++; });
+      const derniere = liste.reduce((m, x) => x.date > m ? x.date : m, '');
+      return {
+        nom, n: liste.length, utiles, pct: utiles / liste.length,
+        ess: liste.filter(x => x.i.voie === 'essentiel').length,
+        moy: notes.length ? notes.reduce((a, x) => a + x.i.score, 0) / notes.length : null,
+        serie, derniere, silence: joursDepuis(derniere),
+      };
+    }).sort((a, b) => b.ess - a.ess || b.pct - a.pct || b.n - a.n);
+    html.push(section('Ce que rapporte chaque source',
+      `Sur toute l'archive affichée : combien d'éléments, quelle part passe le filtre de `
+      + `l'utile, combien d'essentiels. Une source muette depuis plus de dix jours est signalée.`,
+      `<div class="defile"><table class="t-sources"><thead><tr><th>Source</th><th>Éléments</th>`
+      + `<th>Utiles</th><th>Essentiels</th><th class="col-large">Score moyen</th>`
+      + `<th class="col-large">4 semaines</th><th class="col-large">Dernier</th></tr></thead><tbody>`
+      + lignes.map(s => `<tr><td>${echapper(s.nom)}`
+        + (s.silence > 10 ? `<span class="silence" title="Aucun élément depuis le ${echapper(libelleCourt(s.derniere))}">muette ${s.silence} j</span>` : '')
+        + `</td><td>${s.n}</td>`
+        + `<td>${Math.round(s.pct * 100)} %<span class="barre-pct" style="--p:${(s.pct * 100).toFixed(0)}%"></span></td>`
+        + `<td>${s.ess || '·'}</td>`
+        + `<td class="col-large">${s.moy == null ? '—' : s.moy.toFixed(2).replace('.', ',')}</td>`
+        + `<td class="col-large">${courbe(lissage(s.serie), {l: 84, h: 20, recents: 7})}</td>`
+        + `<td class="col-large">${echapper(dateCourte(s.derniere))}</td></tr>`).join('')
+      + `</tbody></table></div>`));
+
+    flux.innerHTML = `<div class="tendances">${html.join('')}</div>`;
+    const periode = `du ${dateCourte(dates[0])} au ${dateCourte(dernier)}`;
+    resumer(items.length, VUES.tendances, 'élément', periode);
+  }
+
+  const chiffre = (valeur, libelle, accent) =>
+    `<div class="chiffre"><b${accent ? ' class="accent"' : ''}>${valeur}</b><span>${libelle}</span></div>`;
+  const section = (titre, intro, corps) =>
+    `<section class="t-section"><h2 class="t-titre">${titre}</h2>`
+    + (intro ? `<p class="t-intro">${intro}</p>` : '') + corps + `</section>`;
+  const dateCourte = d => {
+    if (!d) return '—';
+    const [a, m, j] = d.split('-').map(Number);
+    return new Date(a, m - 1, j).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+  };
+
+  // Survoler une colonne du rythme en donne le détail sous le graphique ; le clic, lui,
+  // mène à la journée (voir le gestionnaire des renvois vers une journée).
+  flux.addEventListener('mouseover', e => {
+    const col = e.target instanceof Element && e.target.closest('.r-jour');
+    const info = flux.querySelector('.r-info');
+    if (col && info) info.textContent = col.dataset.info;
+  });
+
+  // Un terme cherche dans toute l'archive, depuis l'onglet Veille.
+  flux.addEventListener('click', e => {
+    const t = e.target instanceof Element && e.target.closest('[data-q]');
+    if (t) {
+      changerVue('veille', () => {
+        champ.value = t.dataset.q;
+        champ.dispatchEvent(new Event('input'));
+        window.scrollTo(0, 0);
+      });
+      return;
+    }
+    const point = e.target instanceof Element && e.target.closest('.p-point');
+    if (point) {
+      changerVue('veille', () => {
+        if (voie !== 'tout') voie = 'tout';
+        allerA(point.dataset.date);
+        history.replaceState(null, '', '#' + point.dataset.ancre);
+        allerAncre();
+      });
+    }
+  });
+
+  // ---- écouter le point du jour ----
+  // La synthèse du matin se lit aussi bien à voix haute, pendant qu'on fait autre
+  // chose. La voix est celle du système, en français : rien ne sort de l'appareil,
+  // et le bouton n'apparaît que si le navigateur sait parler.
+  const VOIX = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+  const boutonEcouter = `<button class="ecouter" aria-pressed="false" title="Lire le point du jour à voix haute">`
+    + `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">`
+    + `<path d="M2.5 6v4h2.5l3.5 3V3L5 6z" fill="currentColor" stroke-linejoin="round"/>`
+    + `<path class="onde" d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8"/><path class="onde" d="M12.7 3.8a6 6 0 0 1 0 8.4"/>`
+    + `</svg><span>Écouter</span></button>`;
+
+  function ecouter(bouton){
+    const parle = bouton.getAttribute('aria-pressed') === 'true';
+    speechSynthesis.cancel();
+    document.querySelectorAll('.ecouter[aria-pressed="true"]').forEach(b => {
+      b.setAttribute('aria-pressed', 'false');
+      b.querySelector('span').textContent = 'Écouter';
+    });
+    if (parle) return;
+    const bloc = bouton.closest('.digest').querySelector('.retenir');
+    // Une phrase par puce, lue avec une pause : lu d'un seul tenant, le texte perdait
+    // la frontière entre deux idées. Le gras et le code n'ont pas de voix.
+    const phrases = [...bloc.querySelectorAll('li')].map(li => li.textContent.trim()).filter(Boolean);
+    const voix = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('fr'));
+    const choix = voix.find(v => /natural|neural|premium|enhanced/i.test(v.name)) || voix[0] || null;
+    (phrases.length ? phrases : [bloc.textContent]).forEach((texte, k, tout) => {
+      const u = new SpeechSynthesisUtterance(texte);
+      u.lang = 'fr-FR';
+      if (choix) u.voice = choix;
+      u.rate = 1.02;
+      if (k === tout.length - 1) {
+        u.onend = u.onerror = () => {
+          bouton.setAttribute('aria-pressed', 'false');
+          bouton.querySelector('span').textContent = 'Écouter';
+        };
+      }
+      speechSynthesis.speak(u);
+    });
+    bouton.setAttribute('aria-pressed', 'true');
+    bouton.querySelector('span').textContent = 'Arrêter';
+  }
+
+  flux.addEventListener('click', e => {
+    const b = e.target instanceof Element && e.target.closest('.ecouter');
+    if (b) ecouter(b);
+  });
+  // Une lecture en cours ne survit pas au départ de la page, ni au changement de jour.
+  window.addEventListener('pagehide', () => { if (VOIX) speechSynthesis.cancel(); });
+
   function rendre(){
     // Les deux barres se rafraîchissent avant tout retour anticipé : chacune se masque
     // d'elle-même hors de sa vue, encore faut-il qu'on l'appelle.
     rendreRail();
     rendreNavJour();
     rendreNavSemaine();
+    flux.parentElement.classList.toggle('pleine', vue === 'tendances');
     if (vue === 'semaine') return rendreSemaine();
     if (vue === 'favoris') return rendreFavoris();
+    if (vue === 'tendances') return rendreTendances();
     const portee = joursAffiches();
     let visibles = 0;
     const html = portee.map(j => {
@@ -770,7 +1445,8 @@
             `<div class="digest">`
             // Un seul élément de flex, sinon l'heure passe à la ligne sous le titre :
             // le filet pointillé qui suit prend toute la place restante.
-            + `<p class="chapitre"><span><b>Le point</b>${d.heure ? ' de ' + echapper(d.heure) : ''}</span></p>`
+            + `<p class="chapitre"><span><b>Le point</b>${d.heure ? ' de ' + echapper(d.heure) : ''}</span>`
+            + (VOIX && d.retenir ? boutonEcouter : '') + `</p>`
             + (d.retenir ? `<div class="corps retenir">${d.retenir}</div>` : '')
             + (d.html
               ? `<details class="detail-jour"><summary>Le détail, section par section</summary>`
@@ -788,13 +1464,13 @@
     // navigation juste au-dessus. Deux fois la même date, c'est une de trop.
     flux.classList.toggle('un-jour', vue === 'veille' && !surToutLArchive());
     flux.innerHTML = html || (aucunSignet
-      ? `<p class="vide">Aucun signet relevé pour l'instant.<br><br>`
+      ? `<p class="vide">${DESSIN_VIDE}Aucun signet relevé pour l'instant.<br><br>`
         + `Lancer une fois <code>python run_signets.py --connexion</code> pour ouvrir la `
         + `session X, puis le relevé se fait tout seul à chaque synchronisation.</p>`
       : portee.length === 1 && !requete
-        ? `<p class="vide">Rien ce jour-là dans cette voie.<br><br>`
+        ? `<p class="vide">${DESSIN_VIDE}Rien ce jour-là dans cette voie.<br><br>`
           + `Élargir la voie ci-dessus, ou passer à la journée précédente avec &lsaquo;.</p>`
-        : `<p class="vide">Aucun élément ne correspond.</p>`);
+        : `<p class="vide">${DESSIN_VIDE}Aucun élément ne correspond.</p>`);
     const archive = `sur ${D.jours.length} jour${D.jours.length > 1 ? 's' : ''}`;
     resumer(
       visibles,
@@ -805,13 +1481,66 @@
       'élément',
       (vue === 'signets' || surToutLArchive() || requete) ? archive : '',
     );
+    urlsVisibles = [...flux.querySelectorAll('.enveloppe [data-url]')].map(b => b.dataset.url)
+      .filter((u, k, t) => t.indexOf(u) === k);
+    if (vue === 'veille') {
+      document.getElementById('compteurs').insertAdjacentHTML('beforeend', '<span class="lecture" id="lecture"></span>');
+      rendreLecture();
+    }
   }
+
+  // ---- progression de lecture ----
+  // « 7 lus sur 20 » se lit d'un trait, sans compter les lignes estompées. La jauge
+  // porte sur la journée entière, lus masqués compris : elle dit où l'on en est de la
+  // journée, pas ce qui reste à l'écran.
+  let urlsVisibles = [];
+  let dernierLot = null;     // le dernier « tout marquer lu », qu'on peut annuler
+
+  function rendreLecture(){
+    const bloc = document.getElementById('lecture');
+    if (!bloc) return;
+    const portee = joursAffiches().flatMap(j => j.items)
+      .filter(i => !estSignet(i) && VOIES[voie].ok(i) && sujetOk(i) && texteOk(i));
+    const total = portee.length;
+    const nLus = portee.filter(i => lus.has(i.url)).length;
+    const restants = urlsVisibles.filter(u => !lus.has(u)).length;
+    bloc.innerHTML = !total ? '' :
+      `<span class="jauge" style="--p:${(nLus / total * 100).toFixed(1)}%" aria-hidden="true"><i></i></span>`
+      + `<span><b>${nLus}</b>/${total} lu${nLus > 1 ? 's' : ''}</span>`
+      + ((nLus || masquerLus)
+        ? `<button class="bt-texte" id="masquer-lus" aria-pressed="${masquerLus}">`
+          + `${masquerLus ? 'Afficher les lus' : 'Masquer les lus'}</button>` : '')
+      + (dernierLot
+        ? `<button class="bt-texte" id="annuler-lu">Annuler</button>`
+        : restants ? `<button class="bt-texte" id="tout-lu" title="Marque comme lus les ${restants} éléments affichés">Tout marquer lu</button>` : '');
+  }
+
+  document.getElementById('compteurs').addEventListener('click', e => {
+    const b = e.target instanceof Element && e.target.closest('button');
+    if (!b) return;
+    if (b.id === 'masquer-lus') {
+      masquerLus = !masquerLus;
+      try { localStorage.setItem('veille-masquer-lus', masquerLus ? '1' : '0'); } catch (err) {}
+    } else if (b.id === 'tout-lu') {
+      dernierLot = urlsVisibles.filter(u => !lus.has(u));
+      dernierLot.forEach(u => lus.add(u));
+      ecrireLus();
+    } else if (b.id === 'annuler-lu' && dernierLot) {
+      dernierLot.forEach(u => lus.delete(u));
+      ecrireLus();
+      dernierLot = null;
+    } else return;
+    const garderLot = dernierLot;
+    rendreVoies(); rendreSujets(); rendre();
+    dernierLot = garderLot;
+    rendreLecture();
+  });
 
   function rendreFavoris(){
     const section = sectionFavoris();
     flux.innerHTML = section.html || (listeFavoris().length
-      ? `<p class="vide">Aucun favori ne correspond.</p>`
-      : `<p class="vide">Aucun favori pour l'instant.<br><br>`
+      ? `<p class="vide">${DESSIN_VIDE}Aucun favori ne correspond.</p>`
+      : `<p class="vide">${DESSIN_VIDE}Aucun favori pour l'instant.<br><br>`
         + `Cliquer sur l'étoile ☆ en haut d'un élément, dans n'importe quel onglet, `
         + `pour le mettre de côté. Il restera ici même quand sa journée sera sortie `
         + `de l'archive.</p>`);
@@ -949,8 +1678,6 @@
       + `Le score de chaque élément mesure son intérêt <b>pour la ligne éditoriale du `
       + `site</b> (Claude et Claude Code d'abord, puis les autres modèles et l'agentic `
       + `coding), et non son importance générale.`;
-    // Un seul onglet : la barre n'aurait rien à faire.
-    document.getElementById('onglets').hidden = true;
   }
 
   async function developperAvecCle(url, panneau){
@@ -981,7 +1708,7 @@
     // sait, les consignes lui demandent de le dire plutôt que de broder.
     let contenu = '';
     if (D.worker) {
-      panneau.innerHTML = `<p class="attente">Lecture de l'article…</p>`;
+      panneau.innerHTML = `<p class="attente en-cours">Lecture de l'article…</p>`;
       try {
         const r = await fetch(D.worker + '/?url=' + encodeURIComponent(cible));
         const d = await r.json();
@@ -989,7 +1716,7 @@
       } catch (e) { contenu = ''; }
     }
 
-    panneau.innerHTML = `<p class="attente">Rédaction par Gemini…</p>`;
+    panneau.innerHTML = `<p class="attente en-cours">Rédaction par Gemini…</p>`;
     try {
       const corps = await appelerGemini(cle, promptDeveloppement(item, contenu));
       dev[url] = {html: markdownHtml(corps), genere: new Date().toISOString()};
@@ -1070,7 +1797,7 @@
 
     // Lecture de la page puis rédaction : une vingtaine de secondes. Le dire, plutôt
     // que de laisser un panneau vide qui donne l'impression d'un bouton mort.
-    panneau.innerHTML = `<p class="attente">Lecture de l'article et rédaction…</p>`;
+    panneau.innerHTML = `<p class="attente en-cours">Lecture de l'article et rédaction…</p>`;
     try {
       const reponse = await fetch('/api/developper', {
         method: 'POST',
@@ -1108,6 +1835,8 @@
       b.setAttribute('aria-pressed', marque);
       b.title = b.ariaLabel = marque ? 'Retirer des favoris' : 'Mettre en favori';
       b.textContent = marque ? '★' : '☆';
+      b.classList.remove('pop');
+      if (marque) { void b.offsetWidth; b.classList.add('pop'); }   // relance l'animation
     });
   }
 
@@ -1155,6 +1884,10 @@
     if (carte.classList.contains('signet') && !e.target.closest('a')) return;
     marquer(carte.dataset.url);
     carte.classList.add('lu');
+    rendreLecture();
+    // Le curseur du clavier suit la souris : j reprend là où l'on vient de cliquer.
+    const k = enveloppes().indexOf(carte.closest('.enveloppe'));
+    if (k >= 0) curseur = k;
   });
 
   // La page est un fichier local : elle ne peut rien écrire dans le vault. Elle produit
@@ -1210,6 +1943,9 @@
       + `.</span>`
       + `<button id="reprendre" data-date="${jour ? jour.date : ''}">Reprendre ↓</button>`;
     bloc.hidden = false;
+    // Le radar de la barre d'état balaie tant qu'il y a du neuf à lire.
+    etat.classList.add('du-neuf');
+    etat.querySelector('.nom').title = `${neufs.length} nouveauté${neufs.length > 1 ? 's' : ''} depuis votre dernière visite`;
   }
 
   rendreReprise();

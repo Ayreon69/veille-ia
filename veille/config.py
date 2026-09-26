@@ -38,6 +38,16 @@ MODELE = os.getenv("VEILLE_MODELE", "claude-sonnet-5")
 # Les identifiants de modèles Gemini évoluent vite : garder ce réglage externalisé.
 # `python -m veille.summarize --modeles-gemini` liste ceux que la clé peut appeler.
 MODELE_GEMINI = os.getenv("VEILLE_MODELE_GEMINI", "gemini-3.6-flash")
+# Modèles de repli, essayés dans l'ordre quand le principal reste indisponible après
+# ses tentatives. Un 503 de Gemini est une saturation propre à un modèle, pas une
+# panne de l'API : du 18 au 24/09, cinq exécutions sur neuf ont échoué sur le seul
+# gemini-3.6-flash, et l'hebdo du lundi 21 n'a jamais été écrit. Un modèle d'une
+# génération voisine tourne sur une autre capacité et répond d'ordinaire.
+MODELES_GEMINI_SECOURS = [
+    m.strip()
+    for m in os.getenv("VEILLE_MODELES_GEMINI_SECOURS", "gemini-3.5-flash,gemini-2.5-flash").split(",")
+    if m.strip() and m.strip() != MODELE_GEMINI
+]
 
 # Collecte
 # Fuseau de référence pour dater les notes. Sans lui, une exécution GitHub Actions

@@ -334,6 +334,36 @@ def _resumer_gemini(prompt: str) -> str:
             "et la placer dans le .env."
         )
 
+    # Le modèle configuré d'abord, puis les modèles de repli. Un 503 persistant est une
+    # saturation propre à UN modèle : du 18 au 24/09, cinq exécutions sur neuf sont
+    # tombées sur le seul modèle principal, alors qu'un voisin aurait répondu. Le quota
+    # du tier gratuit est lui aussi compté par modèle. Une clé refusée, en revanche,
+    # le serait partout : elle arrête tout de suite.
+    modeles = [config.MODELE_GEMINI] + list(config.MODELES_GEMINI_SECOURS)
+    derniere = None
+    for rang, modele in enumerate(modeles):
+        try:
+            texte = _appeler_gemini(cle, modele, prompt)
+        except _GeminiIndisponible as e:
+            derniere = e
+            if rang + 1 < len(modeles):
+                print(f"  {e} — repli sur {modeles[rang + 1]}", flush=True)
+            continue
+        if rang:
+            print(f"  Réponse produite par le modèle de repli {modele}.", flush=True)
+        return texte
+    raise RuntimeError(
+        f"{derniere} Modèles essayés : {', '.join(modeles)}. Incident côté Google : la "
+        "prochaine exécution planifiée reprendra les mêmes items, rien n'est perdu."
+    )
+
+
+class _GeminiIndisponible(Exception):
+    """Ce modèle-ci n'a pas répondu, mais un autre le pourrait."""
+
+
+def _appeler_gemini(cle: str, modele: str, prompt: str) -> str:
+    """Un appel à un modèle donné, avec ses tentatives sur erreur transitoire."""
     # Gemini renvoie régulièrement des 503 quand le service est chargé. Sans ces
     # tentatives, un aléa passager de quelques secondes fait échouer tout le run
     # et la veille du jour est perdue — constaté dès la première exécution en CI.
@@ -342,7 +372,7 @@ def _resumer_gemini(prompt: str) -> str:
 
     for tentative in range(4):
         reponse = httpx.post(
-            f"{_GEMINI_BASE}/models/{config.MODELE_GEMINI}:generateContent",
+            f"{_GEMINI_BASE}/models/{modele}:generateContent",
             headers={"x-goog-api-key": cle, "Content-Type": "application/json"},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -368,24 +398,24 @@ def _resumer_gemini(prompt: str) -> str:
             time.sleep(attente)
 
     if reponse.status_code == 429:
-        raise RuntimeError(
-            "Quota Gemini dépassé (429), après 4 tentatives. Le tier gratuit autorise "
-            "~1500 requêtes/jour ; ce pipeline en consomme 1 à 2. Vérifier qu'aucun "
+        raise _GeminiIndisponible(
+            f"Quota de {modele} dépassé (429) après 4 tentatives. Le tier gratuit autorise "
+            "~1500 requêtes/jour ; ce pipeline en consomme 1 à 2 — vérifier qu'aucun "
             "autre projet ne partage la clé."
         )
     if reponse.status_code in transitoires:
-        raise RuntimeError(
-            f"Gemini indisponible ({reponse.status_code}) après 4 tentatives sur ~65s. "
-            "Incident côté Google : la prochaine exécution planifiée reprendra les mêmes "
-            "items, rien n'est perdu."
+        raise _GeminiIndisponible(
+            f"{modele} indisponible ({reponse.status_code}) après 4 tentatives sur ~65s."
         )
     if reponse.status_code in (401, 403):
         raise RuntimeError(f"Clé Gemini refusée ({reponse.status_code}) : {reponse.text[:200]}")
     if reponse.status_code == 404:
-        raise RuntimeError(
-            f"Modèle « {config.MODELE_GEMINI} » introuvable. Les identifiants Gemini changent "
-            "souvent : lancer `python -m veille.summarize --modeles-gemini` pour voir "
-            "ceux que la clé peut appeler, puis ajuster VEILLE_MODELE_GEMINI dans le .env."
+        # Un identifiant retiré ne doit pas empêcher d'essayer le modèle suivant ; le
+        # message dit quand même quoi corriger.
+        raise _GeminiIndisponible(
+            f"Modèle « {modele} » introuvable (404). Les identifiants Gemini changent "
+            "souvent : `python -m veille.summarize --modeles-gemini` liste ceux que la "
+            "clé peut appeler, à reporter dans VEILLE_MODELE_GEMINI du .env."
         )
     reponse.raise_for_status()
 

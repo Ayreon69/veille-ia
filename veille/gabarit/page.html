@@ -9,7 +9,7 @@
      reste un fichier unique, qui s'ouvre hors ligne. Le site publié, lui, sert ses
      fontes en fichiers voisins pour ne pas les renvoyer chaque matin — depuis son
      propre domaine, jamais depuis un tiers. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23f8f6f1'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%239a6410'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f8f6f1'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%239a6410' stroke-opacity='.45' stroke-width='2'/%3E%3Cpath d='M16 16V5a11 11 0 0 1 11 11z' fill='%239a6410' fill-opacity='.35'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%239a6410'/%3E%3C/svg%3E">
 <!-- L'aperçu de partage, lui, ne peut pas l'être : aucun robot ne résout une image
      en data: ni en chemin relatif. Ces balises ne valent donc que sur le site publié,
      et __URL__ y est remplacée à la construction. -->
@@ -22,19 +22,24 @@
 <meta property="og:image" content="__URL__/partage.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="alternate" type="application/rss+xml" title="Veille IA — l'essentiel du jour" href="__URL__/flux.xml">
+<!-- Le thème choisi est posé avant la feuille de style : posé après, la page
+     s'afficherait une fraction de seconde dans l'autre thème à chaque visite. -->
+<script>try{var t=localStorage.getItem('veille-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
 __STYLE__
 </style>
 </head>
 <body>
 
-<div class="etat">
-  <span class="nom"><span class="point"></span>Veille IA</span>
+<div class="etat" id="etat">
+  <span class="nom"><svg class="marque" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-opacity=".35"/><circle cx="8" cy="8" r="3.9" fill="none" stroke="currentColor" stroke-opacity=".2"/><path class="balai" d="M8 8V1.4A6.6 6.6 0 0 1 14.6 8z" fill="currentColor" fill-opacity=".28"/><circle cx="8" cy="8" r="1.9" fill="currentColor"/></svg>Veille IA</span>
   <span id="resume"></span>
   <span class="droite">
-    <div class="onglets" id="onglets" role="tablist"></div>
+    <div class="onglets" id="onglets" role="tablist" aria-label="Vues"></div>
     <button id="sauver" hidden title="Télécharge un fichier favoris-....json, repris à la prochaine synchronisation">Sauvegarder</button>
     <button id="cle" hidden title="Votre clé Gemini, pour développer un article">Clé API</button>
+    <button class="icone" id="aide-bt" aria-label="Raccourcis clavier" title="Raccourcis clavier (?)">?</button>
+    <button class="icone" id="theme" aria-label="Changer de thème"></button>
   </span>
 </div>
 
@@ -44,7 +49,7 @@ __STYLE__
       <button class="fleche" id="prec" aria-label="Jour précédent" title="Jour précédent (flèche gauche)">&lsaquo;</button>
       <button class="fleche" id="suiv" aria-label="Jour suivant" title="Jour suivant (flèche droite)">&rsaquo;</button>
       <button id="datejour" aria-haspopup="dialog" aria-expanded="false" title="Choisir une date"></button>
-      <span class="aide"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> changent de jour</span>
+      <span class="aide"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> changent de jour · <kbd>?</kbd> raccourcis</span>
       <button id="tousjours" aria-pressed="false" title="Empiler toutes les journées, comme avant">Tout</button>
       <div class="calendrier" id="calendrier" role="dialog" aria-label="Choisir une date" hidden></div>
     </div>
@@ -76,6 +81,36 @@ __STYLE__
   <main id="flux"></main>
   <aside class="rail" id="rail" hidden></aside>
 </div>
+
+<!-- Une vraie boîte de dialogue : le navigateur gère seul le piège du focus, la
+     touche Échap et le fond. -->
+<dialog class="aide-clavier" id="aide">
+  <h2>Raccourcis clavier</h2>
+  <div class="aide-grille">
+    <section>
+      <h3>Se déplacer</h3>
+      <dl>
+        <dt><kbd>&larr;</kbd> <kbd>&rarr;</kbd></dt><dd>Jour ou semaine précédente, suivante</dd>
+        <dt><kbd>t</kbd></dt><dd>Revenir à la dernière journée</dd>
+        <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Élément suivant, précédent</dd>
+        <dt><kbd>1</kbd> … <kbd id="nb-onglets">5</kbd></dt><dd>Changer d'onglet</dd>
+        <dt><kbd>/</kbd></dt><dd>Chercher</dd>
+      </dl>
+    </section>
+    <section>
+      <h3>Sur l'élément choisi</h3>
+      <dl>
+        <dt><kbd>o</kbd> ou <kbd>Entrée</kbd></dt><dd>Ouvrir l'article</dd>
+        <dt><kbd>d</kbd></dt><dd>Développer, replier</dd>
+        <div class="prive"><dt><kbd>s</kbd></dt><dd>Mettre en favori</dd></div>
+        <dt><kbd>m</kbd></dt><dd>Marquer lu, non lu</dd>
+        <dt><kbd>c</kbd></dt><dd>Copier son lien</dd>
+      </dl>
+    </section>
+  </div>
+  <p class="aide-pied">Sur téléphone, balayer l'écran vers la gauche ou la droite change de jour.</p>
+  <form method="dialog"><button class="fermer">Fermer</button></form>
+</dialog>
 
 <script id="donnees" type="application/json">__DONNEES__</script>
 <script>

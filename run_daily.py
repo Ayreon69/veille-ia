@@ -55,9 +55,31 @@ def _amorcer(ids: list[str]) -> int:
     return 0
 
 
+def _fenetre_auto() -> str:
+    """Fenêtre qui remonte jusqu'à la dernière exécution réussie, marge comprise.
+
+    Une fenêtre fixe de 36 h couvrait un run sauté, pas deux : les 20 et 21/09, Gemini a
+    fait échouer deux exécutions d'affilée, et celle du 22 ne remontait plus jusqu'aux
+    articles du 20. Rien ne l'indiquait — ils étaient simplement sortis de la fenêtre.
+    Le repère est l'horodatage `maj` de la dernière archive : il n'est écrit que quand
+    le digest a abouti. La déduplication empêche tout doublon, élargir ne coûte rien.
+    """
+    plancher, plafond = 36, 7 * 24
+    derniere = site.charger_jours(1)
+    try:
+        maj = datetime.fromisoformat(derniere[0]["maj"])
+    except (IndexError, KeyError, ValueError):
+        return f"{plancher}h"
+    ecart = (datetime.now(config.FUSEAU) - maj).total_seconds() / 3600
+    return f"{max(plancher, min(plafond, int(ecart) + 12))}h"
+
+
 def main() -> int:
     parseur = argparse.ArgumentParser(description="Digest de veille IA quotidien.")
-    parseur.add_argument("--since", default="24h", help="fenêtre de collecte (ex: 24h, 3d)")
+    parseur.add_argument(
+        "--since", default="24h",
+        help="fenêtre de collecte (ex: 24h, 3d), ou « auto » : depuis la dernière réussite",
+    )
     parseur.add_argument(
         "--dry-run",
         action="store_true",
@@ -84,6 +106,8 @@ def main() -> int:
         return _amorcer(args.amorcer)
 
     sources = config.charger_sources()
+    if args.since == "auto":
+        args.since = _fenetre_auto()
     depuis = collect.fenetre_depuis(args.since)
     print(f"Collecte sur {len(sources)} sources (fenêtre {args.since})\n")
 

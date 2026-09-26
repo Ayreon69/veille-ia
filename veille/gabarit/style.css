@@ -45,11 +45,18 @@ __POLICES__
   /* La titraille du jour, seule taille vraiment grande de la page : c'est elle qui
      dit qu'on lit une édition datée et non une liste de liens. */
   --t-titraille:clamp(2rem, 5.2vw, 3.2rem);
+  /* Les grands chiffres de l'onglet Tendances, en Fraunces comme la titraille : un
+     total se lit comme un titre, pas comme une étiquette. Seconde et dernière
+     exception à l'échelle. */
+  --t-chiffre:clamp(1.55rem, 3.4vw, 2.15rem);
   --suivi-mono:.12em;   /* filature des capitales en mono */
   --suivi-etiq:.2em;    /* étiquettes de section, plus aérées */
   --gouttiere:clamp(16px, 4vw, 20px);
   /* Une seule largeur de page : en-tête, filtres et colonnes s'y alignent. */
   --page:1180px;
+  /* La colonne des scores, que la rangée d'actions doit rejoindre au pixel. */
+  --col-score:3rem;
+  --ecart-score:18px;
 
   /* Ce qui s'écrit SUR l'accent. En thème clair l'accent est sombre et le blanc
      convient (4,4:1) ; en sombre il est clair, et le blanc y tombe à 2,67:1 — sous le
@@ -63,8 +70,15 @@ __POLICES__
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   --titre:Fraunces,Georgia,'Times New Roman',serif;
 }
+/* Le thème suit le système, sauf choix contraire fait avec le bouton de la barre
+   d'état (html[data-theme]). Les jetons sombres sont donc écrits deux fois : une
+   pour le système, qu'un choix « clair » neutralise, une pour le choix « sombre ».
+   `color-scheme` fait suivre au navigateur ce qu'il dessine seul — listes
+   déroulantes, barres de défilement, champs. */
+:root{color-scheme:light}
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
     --h-neutre:290;
     --l-accent:75%;
     --l-accent-doux:25.9%;
@@ -76,6 +90,19 @@ __POLICES__
     --sur-accent:var(--fond);
     --ombre:0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
   }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --h-neutre:290;
+  --l-accent:75%;
+  --l-accent-doux:25.9%;
+  --fond:oklch(13.5% .008 var(--h-neutre));
+  --fond-carte:oklch(18% .010 var(--h-neutre));
+  --fond-doux:oklch(21.5% .011 var(--h-neutre));
+  --texte:oklch(93.5% .010 85);
+  --texte-doux:oklch(68.2% .016 85);
+  --sur-accent:var(--fond);
+  --ombre:0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
 }
 *{box-sizing:border-box}
 body{
@@ -105,17 +132,30 @@ p,li,.resume,.analyse{text-wrap:pretty}
   font-family:var(--mono); font-size:var(--t-1);
   letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
 }
-.etat .nom{color:var(--texte); font-weight:500; letter-spacing:var(--suivi-etiq)}
-/* Le point n'est pas un ornement : c'est le seul endroit de la barre où l'accent
-   paraît, et il marque le site lui-même. */
-.etat .point{
-  display:inline-block; width:6px; height:6px; margin-right:8px;
-  border-radius:50%; background:var(--accent); vertical-align:.1em;
+.etat .nom{
+  display:inline-flex; align-items:center; gap:8px;
+  color:var(--texte); font-weight:500; letter-spacing:var(--suivi-etiq);
 }
+/* La marque remplace le point d'accent du 2026-09-17, et garde son rôle : c'est le
+   seul endroit de la barre où l'accent paraît. Un écran de veille, un radar — et le
+   balai ne tourne que lorsqu'il y a du neuf depuis la dernière visite. Le reste du
+   temps il est immobile : une animation permanente n'annoncerait plus rien. */
+.marque{width:16px; height:16px; flex:none; color:var(--accent)}
+.marque .balai{transform-origin:8px 8px}
+.etat.du-neuf .marque .balai{animation:balayage 3.2s linear infinite}
+@keyframes balayage{to{transform:rotate(360deg)}}
 .etat .droite{margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-/* Sous 40 rem, la barre garde le nom et les onglets ; le résumé se lit déjà sous la
-   titraille, il n'a pas besoin d'occuper une deuxième ligne. */
-@media (max-width:40rem){ .etat #resume{display:none} }
+/* Deux boutons carrés en fin de barre : l'aide clavier et le thème. */
+.etat .icone{
+  flex:none; width:32px; height:32px; padding:0; display:grid; place-items:center;
+  font:inherit; cursor:pointer; background:none; color:var(--texte-doux);
+  border:1px solid var(--bord); border-radius:3px;
+}
+.etat .icone:hover{color:var(--accent); border-color:var(--accent)}
+.etat .icone svg{width:16px; height:16px}
+/* Sous 40 rem, la barre garde le nom ; le résumé se lit déjà sous la titraille, et
+   l'aide clavier n'a pas de clavier à décrire. */
+@media (max-width:40rem){ .etat #resume, .etat #aide-bt{display:none} }
 
 /* ---- en-tête ---- */
 header{background:var(--fond); border-bottom:1px solid var(--bord)}
@@ -169,6 +209,37 @@ header{background:var(--fond); border-bottom:1px solid var(--bord)}
 .onglet:hover{color:var(--texte)}
 .onglet[aria-selected="true"]{color:var(--accent); border-bottom-color:var(--accent)}
 .onglet .n{opacity:.6; margin-left:5px; font-variant-numeric:tabular-nums}
+.onglet svg{display:none}
+
+/* ---- onglets en bas d'écran, sur téléphone ----
+   À 375 px, quatre onglets en capitales ne tenaient pas sur une ligne : la barre
+   épinglée passait à deux rangées, 120 px confisqués en permanence en haut de
+   l'écran — et le pouce n'atteint pas le haut d'un téléphone. Sous 40 rem, les
+   onglets descendent donc en barre d'onglets, icône au-dessus du nom.
+   La barre d'état perd au passage son flou : `backdrop-filter` fait d'un élément le
+   repère des enfants en position fixe, et la barre du bas se serait collée à elle. */
+@media (max-width:40rem){
+  .etat{backdrop-filter:none; background:var(--fond)}
+  .onglets{
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:0;
+    max-width:none; padding:0 0 env(safe-area-inset-bottom);
+    background:color-mix(in oklab, var(--fond) 97%, transparent);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--bord);
+  }
+  .onglets[hidden]{display:none}
+  .onglet{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    min-height:56px; padding:8px 2px 6px; border:0;
+    letter-spacing:0; font-size:var(--t-1);
+  }
+  .onglet svg{display:block; width:20px; height:20px}
+  .onglet .n{display:none}
+  /* L'onglet actif se marque d'un trait au-dessus de l'icône, côté écran. */
+  .onglet[aria-selected="true"]{box-shadow:inset 0 2px 0 var(--accent)}
+  body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+}
 .outils{display:flex; gap:10px; margin-top:16px}
 #recherche{
   flex:1; min-width:0; padding:8px 12px; font:inherit; font-size:var(--t-3);
@@ -481,7 +552,10 @@ main{min-width:0; padding:8px 0 0}
    Le « + » et l'étoile flottaient en absolu dans le coin, à 30 % d'opacité tant qu'on
    ne survolait pas : invisibles au premier regard, inatteignables au doigt. Ils
    descendent dans le flux, sous la carte, et le premier porte son nom. */
-.actions{display:flex; align-items:center; gap:4px; margin:0 0 12px calc(3rem + 18px)}
+.actions{
+  display:flex; align-items:center; gap:4px;
+  margin:0 0 12px calc(var(--col-score) + var(--ecart-score) + 2px);
+}
 .lien-ancre{
   min-height:32px; padding:0 11px; cursor:pointer;
   font-family:var(--mono); font-size:var(--t-1);
@@ -555,7 +629,7 @@ main{min-width:0; padding:8px 0 0}
    Il ne reste qu'un filet entre deux éléments, et le score, qui prend une colonne
    à lui : on descend la colonne des chiffres sans lire un seul titre. */
 .item{
-  display:grid; grid-template-columns:3rem minmax(0,1fr); gap:0 18px;
+  display:grid; grid-template-columns:var(--col-score) minmax(0,1fr); gap:0 var(--ecart-score);
   text-decoration:none; padding:14px 2px; background:none;
   border:0; border-radius:0;
 }
@@ -660,9 +734,344 @@ main{min-width:0; padding:8px 0 0}
 }
 .pied-dev button:hover{color:var(--accent)}
 .vide{text-align:center; color:var(--texte-doux); padding:60px 20px; font-size:var(--t-4)}
+/* Un petit dessin au-dessus des pages vides : la marque du site, au repos. */
+.vide svg{display:block; width:64px; height:64px; margin:0 auto 18px; color:var(--bord-fort)}
 
+/* Une attente qui dure vingt secondes doit se voir vivre : un trait d'accent
+   parcourt le bas du message tant que le modèle écrit. */
+.en-cours::after{
+  content:""; display:block; height:2px; margin-top:10px; border-radius:2px;
+  background:linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat;
+  background-size:40% 100%; animation:chargement 1.3s ease-in-out infinite;
+}
+@keyframes chargement{from{background-position:-60% 0} to{background-position:160% 0}}
+
+/* ---- progression de lecture ----
+   « 7 lus sur 20 » se lit d'un trait, sans compter les lignes estompées. Le
+   bouton qui masque les lus fait de la journée une liste qui se vide à mesure
+   qu'on la lit ; l'autre solde d'un coup ce qu'on a parcouru en diagonale. */
+.compteurs{align-items:center; row-gap:6px}
+.lecture{display:inline-flex; align-items:center; gap:10px}
+.jauge{
+  display:inline-block; width:72px; height:3px; border-radius:2px; overflow:hidden;
+  background:var(--bord); vertical-align:middle;
+}
+.jauge i{display:block; height:100%; width:var(--p); background:var(--accent); transition:width .4s ease}
+.bt-texte{
+  font:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer;
+  padding:6px 0; background:none; border:0; color:var(--texte-doux);
+  text-decoration:underline dotted; text-underline-offset:3px;
+}
+.bt-texte:hover, .bt-texte[aria-pressed="true"]{color:var(--accent)}
+
+/* ---- recherche ---- */
+mark{
+  background:color-mix(in oklch, var(--accent) 24%, transparent); color:inherit;
+  border-radius:2px; padding:0 1px;
+}
+
+/* ---- navigation au clavier ----
+   L'élément choisi par j et k porte un filet d'accent à gauche, et garde de l'air
+   sous la barre d'état quand la page défile pour l'amener. */
+.enveloppe{scroll-margin:72px 0 24px}
+.enveloppe.curseur{box-shadow:inset 3px 0 0 var(--accent)}
+.enveloppe.curseur .item{background:color-mix(in oklch, var(--accent-doux) 45%, transparent)}
+
+/* L'étoile rebondit à peine quand on la coche : la seule confirmation qu'un geste
+   aussi petit mérite. */
+.etoile.pop{animation:pop .38s cubic-bezier(.3,1.7,.5,1)}
+@keyframes pop{40%{transform:scale(1.4)}}
+
+/* ---- transitions entre journées ----
+   La liste glisse dans le sens du temps : vers la droite quand on recule d'un jour,
+   comme une page qu'on tourne vers le passé. Entre deux onglets, un fondu. */
+@media (prefers-reduced-motion:no-preference){
+  #flux{view-transition-name:flux}
+  .titraille{view-transition-name:titraille}
+  ::view-transition-group(flux), ::view-transition-group(titraille){animation-duration:.26s}
+  ::view-transition-old(flux), ::view-transition-new(flux),
+  ::view-transition-old(titraille), ::view-transition-new(titraille){
+    animation-duration:.24s; animation-timing-function:cubic-bezier(.2,.7,.2,1);
+  }
+  :root[data-sens="passe"]::view-transition-old(flux),
+  :root[data-sens="passe"]::view-transition-old(titraille){animation-name:vt-sortie-d}
+  :root[data-sens="passe"]::view-transition-new(flux),
+  :root[data-sens="passe"]::view-transition-new(titraille){animation-name:vt-entree-g}
+  :root[data-sens="futur"]::view-transition-old(flux),
+  :root[data-sens="futur"]::view-transition-old(titraille){animation-name:vt-sortie-g}
+  :root[data-sens="futur"]::view-transition-new(flux),
+  :root[data-sens="futur"]::view-transition-new(titraille){animation-name:vt-entree-d}
+}
+@keyframes vt-sortie-d{to{opacity:0; transform:translateX(32px)}}
+@keyframes vt-sortie-g{to{opacity:0; transform:translateX(-32px)}}
+@keyframes vt-entree-g{from{opacity:0; transform:translateX(-32px)}}
+@keyframes vt-entree-d{from{opacity:0; transform:translateX(32px)}}
+
+/* ---- écouter le point du jour ----
+   Posé après le filet pointillé du chapitre, qui prend toute la place restante :
+   `order` le fait passer derrière le pseudo-élément. */
+.ecouter{
+  order:1; display:inline-flex; align-items:center; gap:7px; min-height:30px; padding:0 10px;
+  font:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer;
+  background:none; color:var(--texte-doux); border:1px solid var(--bord); border-radius:3px;
+}
+.ecouter:hover, .ecouter[aria-pressed="true"]{color:var(--accent); border-color:var(--accent)}
+.ecouter svg{width:13px; height:13px}
+.ecouter[aria-pressed="true"] .onde{animation:onde .9s ease-in-out infinite alternate}
+.ecouter .onde:nth-of-type(2){animation-delay:.3s}
+@keyframes onde{from{opacity:.25}}
+
+/* ---- aide clavier ---- */
+.aide-clavier{
+  width:min(640px, calc(100vw - 32px)); padding:24px 26px 20px;
+  background:var(--fond-carte); color:var(--texte);
+  border:1px solid var(--bord); border-radius:12px; box-shadow:var(--ombre);
+}
+.aide-clavier[open]{animation:apparait .2s ease-out}
+@keyframes apparait{from{opacity:0; transform:translateY(8px) scale(.98)}}
+.aide-clavier::backdrop{background:color-mix(in oklab, var(--texte) 28%, transparent)}
+.aide-clavier h2{font-family:var(--titre); font-weight:400; font-size:var(--t-5); margin:0 0 16px}
+.aide-grille{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:18px 30px}
+.aide-clavier h3{
+  margin:0 0 10px; font-family:var(--mono); font-size:var(--t-1); font-weight:500;
+  letter-spacing:var(--suivi-etiq); text-transform:uppercase; color:var(--texte-doux);
+}
+.aide-clavier dl{display:grid; grid-template-columns:auto 1fr; gap:8px 14px; margin:0; font-size:var(--t-3)}
+.aide-clavier dt{white-space:nowrap}
+.aide-clavier dl > div{display:contents}
+.aide-clavier dd{margin:0; color:var(--texte-doux)}
+.aide-clavier kbd{
+  font-family:var(--mono); font-size:var(--t-1); padding:1px 6px; background:var(--fond);
+  border:1px solid var(--bord-fort); border-bottom-width:2px; border-radius:3px;
+}
+.aide-pied{margin:20px 0 0; font-size:var(--t-2); color:var(--texte-doux)}
+.aide-clavier form{margin:14px 0 0; text-align:right}
+.aide-clavier .fermer{
+  min-height:36px; padding:0 14px; cursor:pointer; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase;
+  background:none; color:var(--texte); border:1px solid var(--bord-fort); border-radius:3px;
+}
+.aide-clavier .fermer:hover{color:var(--accent); border-color:var(--accent)}
+
+/* ---- la semaine d'un coup d'œil ----
+   Sept colonnes au-dessus de la synthèse : ce que chaque journée a pesé, et ce
+   qu'elle a porté d'essentiel. Un clic mène à la journée. */
+.coup-doeil{
+  display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:6px;
+  margin:4px 0 8px; padding:0 0 12px; border-bottom:1px solid var(--bord);
+}
+.jour-barre{
+  display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:0;
+  font:inherit; color:var(--texte-doux); background:none; border:0; cursor:pointer;
+}
+.jour-barre:disabled{cursor:default}
+.coup-doeil{background:linear-gradient(var(--bord-fort), var(--bord-fort)) no-repeat 0 92px / 100% 1px}
+.jb-colonne{
+  position:relative; height:92px; width:min(100%, 44px); margin:0 auto;
+  display:flex; flex-direction:column-reverse;
+}
+.jb-colonne i{display:block; width:100%; border-radius:2px 2px 0 0; transition:filter .15s}
+.jb-colonne .jb-ess{background:var(--accent); border-radius:0}
+.jb-colonne .jb-utile{background:color-mix(in oklch, var(--texte) 22%, var(--fond-doux))}
+.jb-colonne .jb-ess:only-child, .jb-colonne .jb-ess:last-child{border-radius:2px 2px 0 0}
+.jour-barre:hover:not(:disabled) .jb-colonne i{filter:brightness(1.12)}
+.jour-barre:hover:not(:disabled) .jb-nom{color:var(--accent)}
+/* Un jour sans édition : un trait pointillé à la place de la colonne, pour que le
+   trou se voie au lieu de passer pour une journée calme. */
+.jour-barre:disabled .jb-colonne::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px; border-bottom:1px dashed var(--texte-doux);
+}
+.jb-nom, .jb-n{
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; text-align:center; font-variant-numeric:tabular-nums;
+}
+.jb-n{color:var(--texte)}
+.jour-barre:disabled .jb-n{color:var(--texte-doux)}
+.legende{
+  display:flex; flex-wrap:wrap; gap:6px 18px; margin:0 0 26px;
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; color:var(--texte-doux);
+}
+.legende b{color:var(--texte); font-weight:500}
+.pastille{display:inline-block; width:9px; height:9px; margin-right:6px; border-radius:2px; vertical-align:-1px}
+.pastille.ess{background:var(--accent)}
+.pastille.utile{background:color-mix(in oklch, var(--texte) 22%, var(--fond-doux))}
+.pastille.bruit{background:var(--bord)}
+
+/* ---- onglet Tendances ----
+   Tout y est calculé dans la page, à partir des journées qu'elle porte déjà :
+   aucune donnée de plus, aucun appel. Les graphiques sont du HTML et du SVG
+   dessinés à la main — une bibliothèque de graphiques pèserait plus lourd que
+   toutes les données du jour. */
+.tendances{padding-top:14px}
+.t-section{margin:0 0 48px}
+.t-titre{
+  display:flex; align-items:center; gap:12px; margin:0 0 6px;
+  font-family:var(--mono); font-size:var(--t-1); font-weight:500;
+  letter-spacing:var(--suivi-etiq); text-transform:uppercase; color:var(--texte);
+}
+.t-titre::after{
+  content:""; flex:1; height:1px;
+  background:repeating-linear-gradient(90deg, var(--bord-fort) 0 1px, transparent 1px 5px);
+}
+.t-intro{margin:0 0 18px; max-width:64ch; font-size:var(--t-3); color:var(--texte-doux)}
+
+/* Tendances n'a pas de rail : ses graphiques prennent toute la largeur de la page. */
+.colonnes.pleine{grid-template-columns:minmax(0,1fr)}
+
+/* Six chiffres sur une ligne, trois sur une tablette, deux sur un téléphone — jamais
+   cinq et un orphelin. Le filet vertical sépare deux chiffres d'une même ligne, le
+   filet horizontal deux lignes. */
+.chiffres{
+  display:grid; grid-template-columns:repeat(6, minmax(0, 1fr));
+  margin:6px 0 48px; border-top:1px solid var(--bord); border-bottom:1px solid var(--bord);
+}
+.chiffre{padding:16px 16px 14px 0}
+.chiffre:not(:first-child){padding-left:16px; border-left:1px solid var(--bord)}
+@media (max-width:60rem){
+  .chiffres{grid-template-columns:repeat(3, minmax(0, 1fr))}
+  .chiffre:nth-child(3n+1){padding-left:0; border-left:0}
+  .chiffre:nth-child(n+4){border-top:1px solid var(--bord)}
+}
+.chiffre b{
+  display:block; font-family:var(--titre); font-weight:400; font-size:var(--t-chiffre);
+  line-height:1.05; letter-spacing:-.01em; font-variant-numeric:lining-nums tabular-nums;
+}
+.chiffre b.accent{color:var(--accent)}
+.chiffre span{
+  display:block; margin-top:6px; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux);
+}
+@media (max-width:40rem){
+  .chiffres{grid-template-columns:repeat(2, minmax(0, 1fr))}
+  .chiffre:nth-child(3n+1){padding-left:16px; border-left:1px solid var(--bord)}
+  .chiffre:nth-child(odd){padding-left:0; border-left:0}
+  .chiffre:nth-child(n+3){border-top:1px solid var(--bord)}
+}
+
+/* Le rythme : une colonne par journée, empilée en essentiel, utile et bruit. */
+.rythme{display:flex; align-items:flex-end; gap:2px; height:150px; padding-top:8px}
+.r-jour{
+  flex:1 1 0; min-width:0; height:100%; padding:0; display:flex; flex-direction:column-reverse;
+  background:none; border:0; cursor:pointer; border-bottom:1px solid var(--bord-fort);
+}
+.r-jour i{display:block; width:100%; flex:none}
+.r-jour .r-ess{background:var(--accent)}
+.r-jour .r-utile{background:color-mix(in oklch, var(--texte) 22%, var(--fond-doux))}
+.r-jour .r-bruit{background:var(--bord)}
+.r-jour:hover i{filter:brightness(1.15)}
+.r-jour[aria-current="date"]{box-shadow:0 2px 0 var(--accent)}
+.r-jour.absent{cursor:default; border-bottom:1px dashed var(--bord-fort)}
+.r-axe{
+  position:relative; height:22px; margin-top:6px;
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; color:var(--texte-doux);
+}
+.r-axe span{position:absolute; top:0; white-space:nowrap; transform:translateX(-1px)}
+.r-axe span::before{
+  content:""; position:absolute; left:0; top:-6px; width:1px; height:5px; background:var(--bord-fort);
+}
+.r-note{margin:12px 0 0; font-size:var(--t-2); color:var(--texte-doux)}
+.r-info{
+  min-height:1.6em; margin:10px 0 0; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte);
+}
+
+/* Les sujets qui montent : une ligne par terme, sa courbe sur quatre semaines. */
+.termes{list-style:none; margin:0; padding:0; columns:2 22rem; column-gap:40px}
+.termes li{break-inside:avoid}
+.terme{
+  display:grid; grid-template-columns:minmax(0,1fr) 96px 2.6rem 4.2rem; align-items:center;
+  gap:12px; width:100%; padding:9px 0; text-align:left; font:inherit; cursor:pointer;
+  background:none; border:0; border-bottom:1px solid var(--bord); color:var(--texte);
+}
+.terme:hover .t-nom{color:var(--accent)}
+.t-nom{font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.t-n, .t-var{
+  font-family:var(--mono); font-size:var(--t-2); text-align:right; font-variant-numeric:tabular-nums;
+}
+.t-n{color:var(--texte-doux)}
+.t-var{color:var(--accent); font-weight:500}
+.spark{width:96px; height:26px; overflow:visible}
+.spark .ligne-s{fill:none; stroke:var(--texte-doux); stroke-width:1.4; stroke-linejoin:round; stroke-linecap:round}
+.spark .aire{fill:color-mix(in oklch, var(--texte) 7%, transparent)}
+.spark .recent{fill:color-mix(in oklch, var(--accent) 14%, transparent)}
+.spark .fin{fill:var(--accent)}
+
+/* Les sources : un tableau, parce que c'en est un. */
+.defile{overflow-x:auto; margin:0 calc(-1 * var(--gouttiere)); padding:0 var(--gouttiere)}
+.t-sources{width:100%; border-collapse:collapse; font-size:var(--t-3)}
+.t-sources th{
+  padding:0 10px 8px; text-align:right; white-space:nowrap; font-weight:500;
+  font-family:var(--mono); font-size:var(--t-1); letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; color:var(--texte-doux); border-bottom:1px solid var(--bord-fort);
+}
+.t-sources th:first-child, .t-sources td:first-child{text-align:left; padding-left:0}
+.t-sources td{
+  padding:9px 10px; text-align:right; border-bottom:1px solid var(--bord);
+  font-family:var(--mono); font-size:var(--t-2); font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.t-sources td:first-child{font-family:var(--pile); font-size:var(--t-3); font-weight:500; white-space:normal}
+.t-sources tr:hover td{background:color-mix(in oklch, var(--fond-doux) 70%, transparent)}
+.t-sources .spark{width:84px; height:20px; vertical-align:middle}
+.barre-pct{
+  display:inline-block; width:54px; height:6px; margin-left:8px; border-radius:3px;
+  vertical-align:middle; background:linear-gradient(90deg, var(--accent) var(--p), var(--bord) var(--p));
+}
+.silence{
+  display:inline-block; margin-left:8px; padding:0 5px; border-radius:3px;
+  font-family:var(--mono); font-size:var(--t-1); font-weight:400; letter-spacing:var(--suivi-mono);
+  text-transform:uppercase; color:var(--texte-doux); border:1px dashed var(--bord-fort);
+}
+@media (max-width:40rem){ .t-sources .col-large, .t-sources .barre-pct{display:none} }
+
+/* Les versions : une piste par produit, un point par version publiée. */
+.pistes{display:grid; grid-template-columns:minmax(7rem, 11rem) minmax(0, 1fr); gap:0 16px; align-items:center}
+.p-nom{padding:10px 0; font-size:var(--t-3); font-weight:500; border-bottom:1px solid var(--bord)}
+.p-nom small{
+  display:block; font-family:var(--mono); font-size:var(--t-1); font-weight:400;
+  letter-spacing:var(--suivi-mono); color:var(--texte-doux);
+}
+.p-piste{position:relative; height:100%; min-height:48px; border-bottom:1px solid var(--bord)}
+.p-piste::before{content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--bord-fort)}
+.p-point{
+  position:absolute; top:50%; width:11px; height:11px; padding:0;
+  margin:calc(-5.5px + var(--j, 0) * 5px) 0 0 -5.5px;
+  border-radius:50%; cursor:pointer; background:var(--fond); border:2px solid var(--accent);
+  transition:transform .12s;
+}
+.p-point:hover, .p-point:focus-visible{transform:scale(1.5); background:var(--accent); outline:none}
+.p-axe{grid-column:2; position:relative; height:22px; margin-top:6px}
+.p-axe span{
+  position:absolute; top:0; font-family:var(--mono); font-size:var(--t-1);
+  letter-spacing:var(--suivi-mono); text-transform:uppercase; color:var(--texte-doux); white-space:nowrap;
+}
+/* Sur téléphone, la piste n'aurait que 200 px pour huit semaines : le nom passe
+   au-dessus d'elle, et elle prend toute la largeur. */
+@media (max-width:40rem){
+  .pistes{grid-template-columns:minmax(0, 1fr)}
+  .p-nom{padding:12px 0 0; border-bottom:0}
+  .p-nom small{letter-spacing:0}
+  .p-piste{min-height:34px}
+  .p-point{width:8px; height:8px; margin:calc(-4px + var(--j, 0) * 4px) 0 0 -4px; border-width:1.5px}
+  .p-axe{grid-column:1}
+}
+
+/* Rien de tout cela ne bouge pour qui l'a demandé à son système. */
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    transition-duration:.01ms !important; scroll-behavior:auto !important;
+  }
+}
+
+/* Sur téléphone, seules les marges verticales se resserrent. Les horizontales
+   restent celles de la gouttière commune : `main` en ajoutait 14 px de son côté, en
+   plus de celle de `.colonnes`, et le point du jour démarrait 14 px à droite des
+   versions publiées juste au-dessus. */
 @media(max-width:600px){
-  .bandeau{padding:14px 14px 10px}
-  .filtres{padding:8px 14px 10px}
-  main{padding:4px 14px 60px}
+  .bandeau{padding-top:14px; padding-bottom:10px}
+  .filtres{padding-top:8px; padding-bottom:10px}
+  main{padding-bottom:60px}
+  :root{--col-score:2.3rem; --ecart-score:12px}
 }
