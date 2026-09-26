@@ -54,6 +54,7 @@ Le même générateur produit deux pages, distinguées par un seul drapeau :
 | | Page personnelle | Page publique |
 |---|---|---|
 | Actualités, digests quotidiens, scores | oui | oui |
+| Onglet Tendances (rythme, sujets, versions, sources), calculé dans la page | oui | oui |
 | Signets X et leurs fiches | oui | **non** |
 | Favoris | oui | **non** |
 | Développements d'articles déjà produits | oui | **non** |
