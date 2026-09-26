@@ -13,7 +13,10 @@
   // immédiate — l'animation n'est jamais une condition du fonctionnement.
   const sobre = matchMedia('(prefers-reduced-motion: reduce)');
   function transition(sens, maj){
-    if (!document.startViewTransition || sobre.matches || document.hidden) return maj();
+    // Une liste de toutes les journées dépasse 200 000 px : en faire un instantané pour
+    // l'animer coûterait plus que l'animation n'apporte.
+    const enorme = flux.offsetHeight > 30000;
+    if (!document.startViewTransition || sobre.matches || document.hidden || enorme) return maj();
     document.documentElement.dataset.sens = sens;
     const t = document.startViewTransition(maj);
     t.finished.finally(() => { delete document.documentElement.dataset.sens; });
@@ -651,13 +654,22 @@
     const nb = new Date(an, mois + 1, 0).getDate();
     const courant = `${an}-${String(mois + 1).padStart(2, '0')}`;
 
+    // Chaque journée est teintée selon ce qu'elle a porté d'essentiel, rapporté à la
+    // plus riche du mois : le calendrier se lit comme une carte de chaleur, et l'on
+    // voit d'un coup d'œil quelle journée mérite qu'on y retourne.
+    const essentielsDe = j => j.items.filter(i => !estSignet(i) && i.voie === 'essentiel').length;
+    const duMois = DATES.filter(d => d.startsWith(courant)).map(d => essentielsDe(PAR_DATE.get(d)));
+    const plafond = Math.max(1, ...duMois);
+
     let cases = '';
     for (let k = 0; k < decalage; k++) cases += `<span class="cal-case"></span>`;
     for (let d = 1; d <= nb; d++) {
       const cle = cleDate(an, mois, d);
       const j = PAR_DATE.get(cle);
+      const ess = j ? essentielsDe(j) : 0;
       cases += j
-        ? `<button class="cal-case plein" data-date="${cle}"`
+        ? `<button class="cal-case plein" data-date="${cle}" style="--chaleur:${(ess / plafond).toFixed(2)}"`
+          + ` title="${ess} essentiel${ess > 1 ? 's' : ''}"`
           + `${cle === jourActif ? ' aria-current="date"' : ''}>`
           + `${d}<span class="n">${compteJour(j)}</span></button>`
         : `<button class="cal-case" disabled>${d}</button>`;
@@ -679,8 +691,9 @@
   document.getElementById('suiv').addEventListener('click', () => decaler(-1));
 
   document.getElementById('tousjours').addEventListener('click', () => {
+    // Pas de transition vers l'empilement complet : voir transition().
     const cible = jourActif === null ? (dernierJour || DATES[0] || null) : null;
-    transition('', () => allerA(cible));
+    if (cible === null) allerA(null); else transition('', () => allerA(cible));
   });
 
   btDate.addEventListener('click', () => {
@@ -981,9 +994,20 @@
       + `<section class="bloc-sources"><h2>Sources du jour</h2><ul class="sources">`
       + sources.map(([nom, n]) =>
           `<li><span>${echapper(nom)}</span><b>${n}</b></li>`).join('')
-      + `</ul></section>`;
+      + `</ul><button class="bt-texte vers-tendances">Ce que rapporte chaque source →</button></section>`;
     rail.hidden = false;
   }
+
+  // Le compte du jour ne dit pas ce qu'une source vaut sur la durée : l'onglet
+  // Tendances, si. Le rail y renvoie, à la section qui en parle.
+  rail.addEventListener('click', e => {
+    if (!(e.target instanceof Element && e.target.closest('.vers-tendances'))) return;
+    changerVue('tendances', () => {
+      rendreVoies(); rendreSujets(); rendre();
+      const cible = [...flux.querySelectorAll('.t-titre')].find(h => /source/i.test(h.textContent));
+      if (cible) cible.scrollIntoView({block: 'start'});
+    });
+  });
 
   // La marque du site, au repos, au-dessus des pages vides : un radar qui n'a rien vu.
   const DESSIN_VIDE = `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">`
@@ -1001,8 +1025,14 @@
   };
   const NOMS_THEME = {auto: 'Thème du système', light: 'Thème clair', dark: 'Thème sombre'};
   const themeCourant = () => document.documentElement.dataset.theme || 'auto';
+  const COULEURS_BARRE = {light: '#f8f6f1', dark: '#0b0a0f'};
   function rendreTheme(){
     const t = themeCourant();
+    // Un thème choisi à la main vaut pour les deux réglages du système.
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => {
+      const systeme = m.media.includes('dark') ? 'dark' : 'light';
+      m.content = COULEURS_BARRE[t === 'auto' ? systeme : t];
+    });
     boutonTheme.innerHTML = ICONES_THEME[t];
     boutonTheme.title = `${NOMS_THEME[t]} — cliquer pour changer`;
     boutonTheme.setAttribute('aria-label', `${NOMS_THEME[t]}. Changer de thème`);

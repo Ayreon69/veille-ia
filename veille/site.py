@@ -770,6 +770,7 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
     page = (
         gabarit()
         .replace("__POLICES__", polices(externe=public))
+        .replace("__MANIFESTE__", _LIENS_MANIFESTE if public else "")
         .replace("__URL__", config.URL_PUBLIQUE)
         .replace("__DONNEES__", charge)
     )
@@ -803,9 +804,54 @@ def construire(limite: int = JOURS_AFFICHES, public: bool = False) -> Path:
         if image.exists():
             (dossier / "partage.png").write_bytes(image.read_bytes())
 
+        # De quoi installer le site sur un écran d'accueil : sur téléphone, il s'ouvre
+        # alors en plein écran, sa barre d'onglets en bas, comme une application.
+        for nom in _ICONES:
+            icone = DOSSIER_ASSETS / nom
+            if icone.exists():
+                (dossier / nom).write_bytes(icone.read_bytes())
+        (dossier / "manifest.webmanifest").write_text(
+            json.dumps(manifeste(), ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+
         (dossier / "flux.xml").write_text(flux_rss(donnees), encoding="utf-8")
 
     return index
+
+
+# Les icônes d'écran d'accueil, fabriquées par assets/icones.py d'après la marque de la
+# barre d'état. iOS ignore le manifeste et lit la sienne dans un <link> à part.
+_ICONES = ("icone-180.png", "icone-192.png", "icone-512.png", "icone-masquable-512.png")
+_LIENS_MANIFESTE = (
+    '<link rel="manifest" href="manifest.webmanifest">\n'
+    '<link rel="apple-touch-icon" href="icone-180.png">\n'
+    '<meta name="apple-mobile-web-app-title" content="Veille IA">'
+)
+
+
+def manifeste() -> dict:
+    """Le manifeste d'application web du site publié.
+
+    Chemins relatifs : il est servi à côté de la page, et le site ne suppose rien du
+    domaine qui l'héberge. Aucun service worker n'est déclaré — la page se reconstruit
+    chaque matin, un cache hors ligne servirait surtout l'édition de la veille.
+    """
+    return {
+        "name": "Veille IA",
+        "short_name": "Veille IA",
+        "description": "L'actualité de l'IA, triée et résumée chaque jour, en français.",
+        "lang": "fr",
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": "#f8f6f1",
+        "theme_color": "#f8f6f1",
+        "icons": [
+            {"src": "icone-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "icone-512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "icone-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
 
 
 # Le flux ne porte que l'essentiel du jour, et non les quatre-vingts items collectés :

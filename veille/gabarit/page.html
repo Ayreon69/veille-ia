@@ -2,7 +2,11 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- La barre du navigateur, sur téléphone, prend la couleur du papier de la page. Le
+     script réaccorde ces deux valeurs quand un thème est choisi à la main. -->
+<meta name="theme-color" content="#f8f6f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a0f" media="(prefers-color-scheme: dark)">
 <title>Veille IA — l'actualité de l'IA, triée et résumée chaque jour</title>
 <meta name="description" content="Claude, les agents, les modèles et l'agentic coding : collectés, notés et résumés automatiquement, tous les matins.">
 <!-- L'icône est une donnée en ligne, et non un fichier à côté : le fichier local
@@ -22,6 +26,9 @@
 <meta property="og:image" content="__URL__/partage.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="alternate" type="application/rss+xml" title="Veille IA — l'essentiel du jour" href="__URL__/flux.xml">
+<!-- Le manifeste et les icônes d'écran d'accueil, sur le site publié seulement : le
+     fichier local n'a ni domaine à installer, ni fichiers voisins à servir. -->
+__MANIFESTE__
 <!-- Le thème choisi est posé avant la feuille de style : posé après, la page
      s'afficherait une fraction de seconde dans l'autre thème à chaque visite. -->
 <script>try{var t=localStorage.getItem('veille-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>

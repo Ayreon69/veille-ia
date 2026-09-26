@@ -63,6 +63,24 @@ def test_la_page_publiee_porte_ses_metadonnees():
     assert 'type="application/rss+xml"' in page
 
 
+def test_le_manifeste_designe_des_icones_qui_existent():
+    """Une icône manquante ne casse rien à la construction : l'installation, si."""
+    m = site.manifeste()
+
+    assert m["display"] == "standalone" and m["start_url"] == "./"
+    for icone in m["icons"]:
+        assert icone["src"] in site._ICONES
+        assert (site.DOSSIER_ASSETS / icone["src"]).exists(), f"{icone['src']} absente de assets/"
+    assert any(i.get("purpose") == "maskable" for i in m["icons"])
+
+
+def test_seul_le_site_publie_annonce_un_manifeste():
+    """Le fichier local n'a ni domaine à installer, ni fichier voisin à servir."""
+    assert "__MANIFESTE__" in site.gabarit()
+    assert 'rel="manifest"' in site._LIENS_MANIFESTE
+    assert 'rel="manifest"' not in site.gabarit()
+
+
 def test_les_champs_vides_ne_partent_pas_dans_la_page():
     compact = site._compacter(
         {
