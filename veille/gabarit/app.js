@@ -164,7 +164,7 @@
 
   const LIBELLES = {
     prio:'Claude & Co', labs:'Labos', outils:'Outils',
-    agregateur:'Agrégateurs', analyse:'Analyses', francophone:'Francophone',
+    agregateur:'Agrégateurs', analyse:'Analyses', x:'Sur X', francophone:'Francophone',
     // Ne sert que dans les favoris, qui mêlent actualités et signets. Ailleurs le
     // compteur tombe à zéro et la puce est retirée d'elle-même.
     signets:'Signets'

@@ -158,6 +158,9 @@ URL_PUBLIQUE = os.getenv("VEILLE_URL_PUBLIQUE", "https://veille-ia-rj.pages.dev"
 def charger_sources(inclure_inactives: bool = False) -> list[dict]:
     """Charge sources.yaml et renvoie les sources actives.
 
+    Une source qui déclare `requiert_env` reste dormante tant que cette variable est vide :
+    une source payante attend son secret sans afficher d'échec dans chaque note.
+
     Args:
         inclure_inactives: si True, renvoie aussi les sources marquées actif: false
     """
@@ -165,7 +168,11 @@ def charger_sources(inclure_inactives: bool = False) -> list[dict]:
         sources = yaml.safe_load(f)
 
     if not inclure_inactives:
-        sources = [s for s in sources if s.get("actif", True)]
+        sources = [
+            s for s in sources
+            if s.get("actif", True)
+            and (not s.get("requiert_env") or os.getenv(s["requiert_env"], "").strip())
+        ]
 
     for s in sources:
         s.setdefault("params", {})

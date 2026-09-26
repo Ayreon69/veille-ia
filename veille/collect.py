@@ -9,7 +9,7 @@ remontés dans le digest pour être visibles sans consulter les logs.
 import time
 from datetime import UTC, datetime, timedelta
 
-from . import config, feeds, scrapers
+from . import config, feeds, reseaux, scrapers
 
 _COLLECTEURS = {
     "rss": feeds.lire_rss,
@@ -18,6 +18,8 @@ _COLLECTEURS = {
     "scrape_claude_blog": scrapers.scraper_claude_blog,
     "scrape_the_batch": scrapers.scraper_the_batch,
     "sitemap": scrapers.scraper_sitemap,
+    "follow_builders": reseaux.lire_follow_builders,
+    "x_api": reseaux.lire_x_api,
 }
 
 
@@ -42,7 +44,9 @@ def collecter(
 
         debut = time.monotonic()
         try:
-            bruts = collecteur(source)
+            # La fenêtre voyage avec la source : une API payée au post (X) ne doit
+            # demander que ce qui sera gardé. Les autres collecteurs l'ignorent.
+            bruts = collecteur({**source, "_depuis": depuis})
         except Exception as e:  # noqa: BLE001 — aucune source ne doit casser le run
             echecs.append({"source": source["nom"], "erreur": f"{type(e).__name__}: {e}"})
             if verbeux:

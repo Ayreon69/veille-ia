@@ -91,16 +91,25 @@ def lire_rss(source: dict) -> list[dict]:
     # Les changelogs déclarent un extrait plus long : leur contenu utile est la liste
     # complète des puces, pas les deux premières.
     limite_extrait = source.get("extrait_max", config.EXTRAIT_MAX_DEFAUT)
+    params = source.get("params", {})
+    # Un flux déjà trié par votes (Reddit /top) n'a de valeur qu'en tête : au-delà, on
+    # paierait en tokens des fils que personne n'a retenus.
+    entrees = flux.entries[: params["max_entrees"]] if params.get("max_entrees") else flux.entries
+    # Écarte les publications de routine d'un flux par ailleurs utile (nightly, alpha).
+    exclure = re.compile(params["exclure_titre"], re.I) if params.get("exclure_titre") else None
 
-    for entree in flux.entries:
+    for entree in entrees:
         lien = entree.get("link") or ""
         titre = nettoyer_html(entree.get("title", ""), limite=200)
-        if not lien or not titre:
+        if not lien or not titre or (exclure and exclure.search(titre)):
             continue
 
         extrait = entree.get("summary") or entree.get("description") or ""
-        if not extrait and entree.get("content"):
-            extrait = entree["content"][0].get("value", "")
+        # Le contenu complet l'emporte quand il est plus riche : le changelog Codex met
+        # le numéro de version en résumé (« 0.157.1 ») et les notes dans le contenu.
+        contenu = entree["content"][0].get("value", "") if entree.get("content") else ""
+        if len(contenu) > len(extrait):
+            extrait = contenu
 
         items.append(
             {

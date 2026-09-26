@@ -46,6 +46,102 @@
     # Sans ce filtre, chaque page remonterait dans une dizaine de traductions.
     filtre_url: /docs/en/
 
+# ── Ajoutées le 26/09/2026 : ce que l'équipe Claude publie hors des annonces ──────────
+
+# Les billets d'ingénierie (harnais, auto mode, Managed Agents, postmortems) : le « comment
+# c'est fait » derrière Claude Code. Page sans date ni flux : amorcée à l'ajout.
+- id: anthropic_engineering
+  nom: Anthropic Engineering
+  type: scrape_anthropic
+  url: https://www.anthropic.com/engineering
+  categorie: labs
+  poids: 3
+  actif: true
+  params:
+    prefixe: /engineering/
+
+# Le flux officiel des notes de version de l'API : changements de facturation, nouveaux
+# paramètres, dépréciations. Deux à trois entrées par semaine, datées.
+- id: claude_platform
+  nom: Claude Platform (notes de version)
+  type: rss
+  url: https://platform.claude.com/docs/en/release-notes/feed.xml
+  categorie: outils
+  poids: 3
+  actif: true
+  extrait_max: 2500
+
+# La chaîne @claude : démonstrations Claude Code (boucles de vérification, retours de
+# Stripe…), une vidéo tous les deux jours environ. La description sert d'extrait.
+- id: youtube_claude
+  nom: Claude (YouTube)
+  type: rss
+  url: https://www.youtube.com/feeds/videos.xml?channel_id=UCV03SRZXJEz-hchIAogeJOg
+  categorie: labs
+  poids: 3
+  actif: true
+  extrait_max: 800
+
+- id: youtube_anthropic
+  nom: Anthropic (YouTube)
+  type: rss
+  url: https://www.youtube.com/feeds/videos.xml?channel_id=UCrDwWp7EBBv4NwvScIpBDOA
+  categorie: labs
+  poids: 1
+  actif: true
+  extrait_max: 800
+
+# Posts X de Boris Cherny, Cat Wu, Thariq, Alex Albert, @claudeai… et d'une vingtaine
+# d'autres (Karpathy, swyx, Codex, Vercel). Flux JSON public du projet follow-builders,
+# régénéré chaque matin vers 06 h 40 UTC — avant notre exécution. Voir veille/reseaux.py.
+- id: x_builders
+  nom: X — builders (follow-builders)
+  type: follow_builders
+  url: https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json
+  categorie: x
+  poids: 2
+  actif: true
+  # Un post est une affirmation de son auteur, pas un fait vérifié.
+  titre_utilisateur: true
+  extrait_max: 1500
+  params:
+    depot: zarazhangrui/follow-builders
+    # Investisseurs et dirigeants hors technique : hors profil.
+    exclure: [mattturck, garrytan, adityaag, nikunj, levie, zarazhangrui]
+    min_caracteres: 50
+
+# Les comptes que follow-builders ne suit pas — Lydia Hallie, Noah Zweben, @ClaudeDevs —
+# et ceux de l'équipe Claude Code, en direct pour ne pas dépendre de ses crédits.
+# API officielle, payée au post lu (0,005 $) : ~20 posts/jour ≈ 3 $/mois.
+# Dormante tant que le secret X_BEARER_TOKEN n'existe pas — voir Sources.md.
+- id: x_claude_code
+  nom: X — équipe Claude Code
+  type: x_api
+  url: https://api.x.com/2/tweets/search/recent
+  categorie: x
+  poids: 3
+  actif: true
+  requiert_env: X_BEARER_TOKEN
+  titre_utilisateur: true
+  extrait_max: 4000
+  params:
+    comptes: [lydiahallie, trq212, bcherny, _catwu, noahzweben, alexalbert__, adocomplete, ClaudeDevs]
+    max_par_compte: 10
+    min_caracteres: 50
+
+# Le meilleur des retours d'usage, trié par votes sur la journée. Les dix premiers fils
+# seulement : au-delà, ce sont des captures d'écran et des plaintes de quota.
+- id: reddit_claudecode
+  nom: r/ClaudeCode
+  type: rss
+  url: https://www.reddit.com/r/ClaudeCode/top/.rss?t=day
+  categorie: agregateur
+  poids: 2
+  actif: true
+  titre_utilisateur: true
+  params:
+    max_entrees: 10
+
 - id: openai
   nom: OpenAI News
   type: rss
@@ -96,7 +192,9 @@
   url: https://news.smol.ai/rss.xml
   categorie: agregateur
   poids: 3
-  actif: true
+  # Désactivée le 26/09/2026 — flux figé au 09/09 (dernier numéro sur le site : 10/09).
+  # Arrêt en amont, pas une panne chez nous : repérée par l'onglet Tendances.
+  actif: false
 
 - id: hackernews
   nom: Hacker News
@@ -142,6 +240,17 @@
   nom: TLDR AI
   type: rss
   url: https://tldr.tech/api/rss/ai
+  categorie: agregateur
+  poids: 2
+  actif: true
+
+# Ajoutée le 26/09/2026 pour remplacer AI News. Actualité IA seule, en anglais, sourcée :
+# une dizaine d'articles par jour, qui couvrent les annonces de tous les labos — le
+# « reste » que la veille centrée sur Claude laissait passer.
+- id: the_decoder
+  nom: The Decoder
+  type: rss
+  url: https://the-decoder.com/feed/
   categorie: agregateur
   poids: 2
   actif: true
@@ -221,6 +330,75 @@
   poids: 2
   actif: true
 
+# ── Ajoutées le 26/09/2026 : des praticiens de l'agentic coding ───────────────────────
+# Peu de billets chacun, mais écrits par des gens qui codent avec ces outils tous les
+# jours. Un flux silencieux ne coûte rien ; la mesure de rendement tranchera.
+
+- id: pragmatic_engineer
+  nom: The Pragmatic Engineer
+  type: rss
+  # Substack sur domaine propre : passe depuis GitHub Actions.
+  url: https://newsletter.pragmaticengineer.com/feed
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: addy_osmani
+  nom: Addy Osmani
+  type: rss
+  url: https://addyosmani.com/rss.xml
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: armin_ronacher
+  nom: Armin Ronacher
+  type: rss
+  url: https://lucumr.pocoo.org/feed.atom
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: one_useful_thing
+  nom: One Useful Thing (Ethan Mollick)
+  type: rss
+  url: https://www.oneusefulthing.org/feed
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: dbreunig
+  nom: Drew Breunig
+  type: rss
+  url: https://www.dbreunig.com/feed.xml
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: karpathy
+  nom: Andrej Karpathy
+  type: rss
+  url: https://karpathy.bearblog.dev/feed/
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: ghuntley
+  nom: Geoffrey Huntley
+  type: rss
+  url: https://ghuntley.com/rss/
+  categorie: analyse
+  poids: 2
+  actif: true
+
+- id: harper_reed
+  nom: Harper Reed
+  type: rss
+  url: https://harper.blog/index.xml
+  categorie: analyse
+  poids: 1
+  actif: true
+
 - id: huggingface
   nom: Hugging Face
   type: rss
@@ -274,6 +452,31 @@
   poids: 2
   actif: true
   extrait_max: 2500
+
+# ── Ajoutées le 26/09/2026 : les autres agents de code ───────────────────────────────
+
+# Le concurrent direct de Claude Code. Les versions correctives et les notes de
+# l'application iOS sont écartées ; restent les versions mineures et les fonctionnalités.
+- id: codex
+  nom: OpenAI Codex (changelog)
+  type: rss
+  url: https://developers.openai.com/codex/changelog/rss.xml
+  categorie: outils
+  poids: 2
+  actif: true
+  extrait_max: 2500
+  params:
+    exclure_titre: 'ChatGPT for (iOS|Android)|Release: \d+\.\d+\.[1-9]'
+
+# Amp (Sourcegraph) : un billet tous les deux jours, souvent des partis pris de
+# conception d'agent qui éclairent ceux de Claude Code.
+- id: amp
+  nom: Amp (news)
+  type: rss
+  url: https://ampcode.com/news.rss
+  categorie: outils
+  poids: 2
+  actif: true
 
 - id: next_ink
   nom: Next.ink

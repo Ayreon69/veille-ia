@@ -98,8 +98,14 @@ def _scraper_liens(source: dict, prefixe: str, exclure: set[str]) -> list[dict]:
 
 
 def scraper_anthropic(source: dict) -> list[dict]:
-    """Articles de anthropic.com/news (aucun flux RSS n'existe)."""
-    return _scraper_liens(source, "/news/", exclure=set())
+    """Articles de anthropic.com/news ou /engineering (aucun flux RSS n'existe).
+
+    `params.prefixe` choisit la rubrique, `/news/` par défaut. La page Engineering ne
+    porte aucune date : ses articles passent la fenêtre, et c'est la déduplication qui
+    les arrête — d'où l'amorçage obligatoire à l'ajout de la source.
+    """
+    prefixe = source.get("params", {}).get("prefixe", "/news/")
+    return _scraper_liens(source, prefixe, exclure=set())
 
 
 def scraper_claude_blog(source: dict) -> list[dict]:

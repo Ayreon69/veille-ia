@@ -61,10 +61,14 @@ Règles :
   figure pas explicitement dans la source. Écrire « devant tel modèle », « le meilleur »
   ou « en première place » alors que la source ne le dit pas est une faute grave, même si
   cela paraît plausible.
-- Les éléments marqués « titre d'utilisateur » viennent de Hacker News ou Reddit : ce sont
-  des affirmations postées par quelqu'un, pas des faits vérifiés, et souvent déjà périmées
-  quand il s'agit d'un classement. Attribue-les explicitement — « selon un post Hacker
-  News », « d'après un fil r/LocalLLaMA » — au lieu de les présenter comme établies.
+- Les éléments marqués « titre d'utilisateur » viennent de Hacker News, Reddit ou X : ce
+  sont des affirmations postées par quelqu'un, pas des faits vérifiés, et souvent déjà
+  périmées quand il s'agit d'un classement. Attribue-les explicitement — « selon un post
+  Hacker News », « d'après un fil r/LocalLLaMA », « Thariq (équipe Claude Code) explique
+  sur X que… » — au lieu de les présenter comme établies.
+- Un post X d'un membre de l'équipe Claude Code qui décrit une fonctionnalité, un réglage
+  ou une façon de s'en servir relève de « Claude & Claude Code ». Un post d'humeur sans
+  contenu (« can't wait », une blague, un lien seul) s'écarte, quel que soit son auteur.
 - Pas de préambule ni de conclusion : commence directement par "## À retenir"."""
 
 _CONSIGNES_SIGNETS = """\
@@ -110,7 +114,9 @@ dans l'actualité IA. Mélange pondéré de :
 - fraîcheur : une annonce du jour prime sur le rappel d'un fait ancien.
 
 Repères : 0,85 et plus = à ne pas rater. 0,50 à 0,84 = utile mais dispensable.
-Sous 0,50 = bruit. Un titre d'utilisateur invérifiable ne dépasse pas 0,60.
+Sous 0,50 = bruit. Un titre d'utilisateur invérifiable ne dépasse pas 0,60 — sauf un post
+X d'un membre d'Anthropic sur ses propres produits : il parle de ce qu'il construit, il
+se note comme une annonce, et un post d'humeur sans contenu reste du bruit.
 Note tous les éléments, n'invente aucun numéro au-delà du dernier fourni, et n'écris
 rien après le tableau."""
 
