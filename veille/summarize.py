@@ -109,7 +109,10 @@ Le score va de 0 à 1 et mesure l'intérêt POUR CE PROFIL — pas l'importance 
 dans l'actualité IA. Mélange pondéré de :
 - nouveauté : information neuve, ou Nième reprise d'une annonce déjà relayée ?
 - importance pour ce profil : est-ce que cela change sa façon de travailler ? Tout ce
-  qui concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum.
+  qui concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum. Ce
+  plancher vaut pour ce qui RENSEIGNE sur Claude — fonctionnalité, comportement, façon
+  de s'en servir —, pas pour une vitrine « j'ai fait un jeu avec Claude » ni une simple
+  réaction à une sortie, qui se notent comme n'importe quel fil d'utilisateur.
 - rigueur : éléments concrets et vérifiables, ou communication sans contenu ?
 - fraîcheur : une annonce du jour prime sur le rappel d'un fait ancien.
 
@@ -185,7 +188,9 @@ _CONSIGNES_TRI = """\
 Note chaque élément fourni de 0 à 1 selon son intérêt POUR CE PROFIL — pas selon son
 importance générale. Mélange pondéré de :
 - importance pour ce profil : est-ce que cela change sa façon de travailler ? Tout ce qui
-  concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum.
+  concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum — s'il renseigne
+  sur Claude ; une vitrine « j'ai fait X avec Claude » ou une réaction à une sortie se
+  note comme n'importe quel fil d'utilisateur.
 - nouveauté : information neuve, ou reprise d'une annonce déjà relayée ?
 - rigueur : ressource concrète et exploitable, ou simple opinion ?
 
