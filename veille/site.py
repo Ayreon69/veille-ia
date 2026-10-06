@@ -667,7 +667,9 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
         # pas un secret — la clé, si, et elle ne quitte jamais le navigateur du lecteur.
         "profil": config.PROFIL if public else "",
         "consignes": summarize.CONSIGNES_DEVELOPPER if public else "",
-        "modele": config.MODELE_GEMINI if public else "",
+        # Même chaîne de repli que le pipeline : un Flash saturé ne doit pas faire échouer
+        # le développement quand un voisin répondrait.
+        "modeles": [config.MODELE_GEMINI, *config.MODELES_GEMINI_SECOURS] if public else [],
         "worker": config.WORKER_LECTURE if public else "",
         # Tant qu'aucun item n'est noté — archive antérieure au scoring, ou bloc de
         # scores perdu — la page s'ouvre sur « Tout ». Filtrer par défaut sur une voie

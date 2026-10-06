@@ -1749,7 +1749,8 @@
 
     panneau.innerHTML = `<p class="attente en-cours">Rédaction par Gemini…</p>`;
     try {
-      const corps = await appelerGemini(cle, promptDeveloppement(item, contenu));
+      const corps = await appelerGemini(cle, promptDeveloppement(item, contenu),
+        etat => { panneau.innerHTML = `<p class="attente en-cours">${etat}</p>`; });
       dev[url] = {html: markdownHtml(corps), genere: new Date().toISOString()};
       memoriserDev();
       panneau.innerHTML = rendu(url);
@@ -1769,27 +1770,51 @@
       + `${D.consignes}\n\nVoici l'article :\n\n` + lignes.join('\n');
   }
 
-  async function appelerGemini(cle, prompt){
-    const reponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${D.modele}:generateContent`,
-      {
-        method: 'POST',
-        headers: {'x-goog-api-key': cle, 'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          contents: [{parts: [{text: prompt}]}],
-          generationConfig: {maxOutputTokens: 12000, temperature: 0.3}
-        })
+  // Les Flash de Gemini saturent par vagues (« high demand », 503) : chaque modèle a
+  // droit à trois essais espacés, puis on passe au suivant — la même chaîne que le
+  // pipeline quotidien. Une clé refusée l'est partout : on s'arrête tout de suite.
+  const TRANSITOIRES = new Set([429, 500, 502, 503, 504]);
+  const pause = ms => new Promise(r => setTimeout(r, ms));
+
+  async function appelerGemini(cle, prompt, signaler = () => {}){
+    const modeles = D.modeles && D.modeles.length ? D.modeles : ['gemini-flash-latest'];
+    let derniere = null;
+    for (const [rang, modele] of modeles.entries()) {
+      if (rang) signaler(`Gemini saturé — essai avec ${echapper(modele)}…`);
+      for (let essai = 0; essai < 3; essai++) {
+        if (essai) {
+          signaler(`Gemini saturé — nouvel essai dans ${essai * 4} s…`);
+          await pause(essai * 4000);
+        }
+        let reponse;
+        try {
+          reponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modele}:generateContent`,
+            {
+              method: 'POST',
+              headers: {'x-goog-api-key': cle, 'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                contents: [{parts: [{text: prompt}]}],
+                generationConfig: {maxOutputTokens: 12000, temperature: 0.3}
+              })
+            }
+          );
+        } catch (e) { derniere = e; break; }   // réseau : modèle suivant
+        const donnees = await reponse.json().catch(() => ({}));
+        if (reponse.ok) {
+          const parts = ((donnees.candidates || [])[0] || {}).content;
+          const texte = ((parts && parts.parts) || []).map(p => p.text || '').join('').trim();
+          if (!texte) throw new Error('réponse vide du modèle');
+          return texte;
+        }
+        const message = (donnees.error && donnees.error.message) || ('HTTP ' + reponse.status);
+        if ([400, 401, 403].includes(reponse.status)) throw new Error('clé refusée — ' + message);
+        derniere = new Error(message);
+        if (!TRANSITOIRES.has(reponse.status)) break;   // 404 : modèle retiré, au suivant
       }
-    );
-    const donnees = await reponse.json().catch(() => ({}));
-    if (!reponse.ok) {
-      const message = (donnees.error && donnees.error.message) || ('HTTP ' + reponse.status);
-      throw new Error(reponse.status === 400 ? 'clé refusée — ' + message : message);
     }
-    const parts = ((donnees.candidates || [])[0] || {}).content;
-    const texte = ((parts && parts.parts) || []).map(p => p.text || '').join('').trim();
-    if (!texte) throw new Error('réponse vide du modèle');
-    return texte;
+    throw new Error(`Gemini est saturé sur tous les modèles essayés (${modeles.join(', ')}). `
+      + `Réessaie dans quelques minutes. Dernière réponse : ${derniere ? derniere.message : '—'}`);
   }
 
   const marquerFait = url =>

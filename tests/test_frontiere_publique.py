@@ -115,3 +115,13 @@ def test_aucune_phrase_personnelle_dans_la_page_publique(jours, monkeypatch, tmp
     for phrase in (PHRASE_SIGNET, PHRASE_FAVORI, PHRASE_DEV):
         assert phrase not in html
     assert PHRASE_SEMAINE in html
+
+
+def test_la_page_publique_embarque_la_chaine_de_repli(jours):
+    """Le développement se fait dans le navigateur : sans la liste des modèles de
+    secours, un Flash saturé (« high demand ») le faisait échouer d'emblée."""
+    public = site._preparer(jours, public=True)
+
+    assert public["modeles"][0] == config.MODELE_GEMINI
+    assert public["modeles"][1:] == config.MODELES_GEMINI_SECOURS
+    assert site._preparer(jours, public=False)["modeles"] == []
