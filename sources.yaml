@@ -164,19 +164,54 @@
   url: https://blog.google/technology/ai/rss/
   categorie: labs
   poids: 2
-  # Désactivée le 22/08/2026 — 6 items en 19 jours, 0 utile (0 %).
-  # Communication produit, sans contenu technique exploitable.
-  actif: false
+  # Désactivée le 22/08/2026 (0 utile sur 6, sous l'ancien profil centré Claude).
+  # Réactivée le 06/10 : le profil couvre tout le spectre, et c'est la voix officielle
+  # de Gemini — on ne la voyait que de seconde main.
+  actif: true
 
 - id: google_research
   nom: Google Research
   type: rss
   url: https://research.google/blog/rss/
   categorie: labs
+  poids: 1
+  # Désactivée le 22/08/2026 (hors du champ agentic coding de l'ancien profil).
+  # Réactivée le 06/10 avec le profil « tout le spectre », poids 1.
+  actif: true
+
+# ── Ajoutées le 06/10/2026 : tout le spectre de l'IA ─────────────────────────────────
+# Mesure du 27/09 au 06/10 : Qwen, Meta, Gemini, DeepSeek n'arrivaient que de seconde
+# main (Reddit, HN, The Decoder) ; rien sur la robotique, les puces, la sécurité.
+
+# Les poids publiés par les labos eux-mêmes. DeepSeek, Moonshot, Zhipu, MiniMax n'ont
+# ni blog ni flux : c'est leur seul canal officiel. Variantes quantifiées écartées.
+- id: hf_modeles
+  nom: Hugging Face — nouveaux modèles des labos
+  type: hf_modeles
+  url: https://huggingface.co/api/models
+  categorie: labs
   poids: 2
-  # Désactivée le 22/08/2026 — 5 items en 19 jours, 0 utile (0 %).
-  # Recherche fondamentale, hors du champ agentic coding.
-  actif: false
+  actif: true
+  params:
+    organisations: [Qwen, deepseek-ai, meta-llama, facebook, mistralai, google, openai,
+                    moonshotai, zai-org, MiniMaxAI, xai-org, microsoft, apple, allenai,
+                    black-forest-labs, stabilityai, tencent, baidu, ibm-granite]
+
+- id: microsoft_research
+  nom: Microsoft Research
+  type: rss
+  url: https://www.microsoft.com/en-us/research/feed/
+  categorie: labs
+  poids: 1
+  actif: true
+
+- id: apple_ml
+  nom: Apple Machine Learning Research
+  type: rss
+  url: https://machinelearning.apple.com/rss.xml
+  categorie: labs
+  poids: 1
+  actif: true
 
 - id: mistral
   nom: Mistral AI
@@ -253,6 +288,49 @@
   url: https://the-decoder.com/feed/
   categorie: agregateur
   poids: 2
+  actif: true
+
+# Récapitulatif hebdomadaire de toute l'actualité IA (newsletter et podcast) : le filet
+# de sécurité contre les angles morts.
+- id: last_week_in_ai
+  nom: Last Week in AI
+  type: rss
+  url: https://lastweekin.ai/feed
+  categorie: agregateur
+  poids: 2
+  actif: true
+
+- id: ars_ai
+  nom: Ars Technica — IA
+  type: rss
+  url: https://arstechnica.com/ai/feed/
+  categorie: agregateur
+  poids: 2
+  actif: true
+
+- id: mit_tech_review
+  nom: MIT Technology Review — IA
+  type: rss
+  url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+  categorie: agregateur
+  poids: 1
+  actif: true
+
+- id: ieee_ai
+  nom: IEEE Spectrum — IA
+  type: rss
+  url: https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss
+  categorie: agregateur
+  poids: 1
+  actif: true
+
+# Robotique et IA incarnée — absente jusqu'ici.
+- id: ieee_robotique
+  nom: IEEE Spectrum — robotique
+  type: rss
+  url: https://spectrum.ieee.org/feeds/topic/robotics.rss
+  categorie: agregateur
+  poids: 1
   actif: true
 
 - id: bens_bites
@@ -395,6 +473,46 @@
   nom: Harper Reed
   type: rss
   url: https://harper.blog/index.xml
+  categorie: analyse
+  poids: 1
+  actif: true
+
+# Papiers de recherche de la veille les plus votés — la recherche n'arrivait que par
+# Simon Willison ou Hacker News.
+- id: hf_papiers
+  nom: Hugging Face Papers
+  type: hf_papiers
+  url: https://huggingface.co/api/daily_papers
+  categorie: analyse
+  poids: 1
+  actif: true
+  params:
+    min_votes: 15
+    max_entrees: 8
+
+# Puces, centres de calcul, économie de l'inférence.
+- id: semianalysis
+  nom: SemiAnalysis
+  type: rss
+  url: https://newsletter.semianalysis.com/feed
+  categorie: analyse
+  poids: 2
+  actif: true
+
+# Évaluations de capacités dangereuses et de sécurité des modèles.
+- id: metr
+  nom: METR
+  type: rss
+  url: https://metr.org/blog/rss.xml
+  categorie: analyse
+  poids: 2
+  actif: true
+
+# L'écosystème IA chinois, d'où viennent Qwen, DeepSeek, Kimi, GLM.
+- id: chinatalk
+  nom: ChinaTalk
+  type: rss
+  url: https://www.chinatalk.media/feed
   categorie: analyse
   poids: 1
   actif: true

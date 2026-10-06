@@ -9,7 +9,7 @@ remontés dans le digest pour être visibles sans consulter les logs.
 import time
 from datetime import UTC, datetime, timedelta
 
-from . import config, feeds, reseaux, scrapers
+from . import config, feeds, huggingface, reseaux, scrapers
 
 _COLLECTEURS = {
     "rss": feeds.lire_rss,
@@ -20,6 +20,8 @@ _COLLECTEURS = {
     "sitemap": scrapers.scraper_sitemap,
     "follow_builders": reseaux.lire_follow_builders,
     "x_api": reseaux.lire_x_api,
+    "hf_modeles": huggingface.lire_modeles,
+    "hf_papiers": huggingface.lire_papiers,
 }
 
 

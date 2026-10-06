@@ -23,7 +23,9 @@ from . import config
 
 # Plafond d'items envoyés au modèle : au-delà, le prompt devient coûteux sans
 # gagner en qualité (les items sont déjà triés par poids de source puis par date).
-MAX_ITEMS = 120
+# Relevé de 120 à 160 le 06/10 : avec tout le spectre de l'IA, une journée chargée
+# dépasse 120, et les sources de poids 1 étaient les premières coupées.
+MAX_ITEMS = 160
 # Plafond de sécurité seulement : la vraie limite est appliquée à la collecte, par
 # source (`extrait_max` dans sources.yaml). Une seconde troncature ici à 300 caractères
 # annulait le bénéfice des extraits longs des changelogs.
@@ -35,8 +37,8 @@ Rédige un digest de veille QUOTIDIEN en français, lisible en 5 minutes environ
 Structure attendue (omets une section si elle est vide, n'en invente pas d'autres) :
 
 ## À retenir
-3 à 5 puces maximum : ce qui mérite vraiment l'attention aujourd'hui. S'il existe le
-moindre élément sur Claude ou Claude Code, il ouvre cette section.
+3 à 5 puces maximum : ce qui mérite vraiment l'attention aujourd'hui, choisi sur la
+portée et non sur le labo. À portée égale, Claude et Claude Code passent devant.
 
 ## Claude & Claude Code
 ## Autres modèles
@@ -48,12 +50,15 @@ Dans les sections, une entrée par sujet, au format :
 
 Règles :
 - L'ordre des sections reflète la priorité du profil et ne doit jamais changer.
-  « Claude & Claude Code » couvre Anthropic ; « Autres modèles » couvre OpenAI, Kimi,
-  Qwen, DeepSeek, Gemini, Mistral, Llama.
-- Écarte sans état d'âme tout ce qui ne correspond pas au profil. Un digest court et
-  pertinent vaut mieux qu'un digest exhaustif. Ne conserve rien par remplissage.
-- Seule exception à la sévérité du filtre : les éléments sur Claude et Claude Code se
-  gardent tous, même mineurs.
+  « Claude & Claude Code » couvre Anthropic ; « Autres modèles » couvre tous les autres
+  labos (OpenAI, Google, Meta, xAI, Mistral, Microsoft, Qwen, DeepSeek, Kimi, GLM…) ;
+  « Écosystème & reste » couvre la recherche, l'image, la vidéo, la voix, la robotique,
+  les puces, la sécurité, la régulation et l'industrie.
+- Le profil veut tout le spectre de l'IA : une percée en vidéo, en robotique ou en
+  recherche a sa place autant qu'une sortie de modèle. Écarte en revanche le remplissage
+  et les redites. Un digest dense vaut mieux qu'un digest exhaustif.
+- Les éléments sur Claude et Claude Code se gardent même mineurs, dans leur section —
+  mais ils n'occupent « À retenir » que s'ils y ont leur place à portée égale.
 - Fusionne les doublons : plusieurs sources relaient souvent la même annonce. Une seule
   entrée, avec le lien le plus informatif.
 - N'invente jamais un fait absent des titres et extraits fournis. En cas de doute sur le
@@ -106,23 +111,35 @@ identifié par son numéro #N :
 <<<SCORES>>>
 [{"i":0,"s":0.92},{"i":1,"s":0.31}]
 
-Le score va de 0 à 1 et mesure l'intérêt POUR CE PROFIL — pas l'importance générale
-dans l'actualité IA. Mélange pondéré de :
+{GRILLE}
+Note tous les éléments, n'invente aucun numéro au-delà du dernier fourni, et n'écris
+rien après le tableau."""
+
+# Grille commune au digest et à la passe de tri. Révisée le 06/10 : l'ancienne donnait à
+# tout ce qui touchait Claude un plancher de 0,80 — Claude prenait 90 essentiels sur 116
+# en huit jours, et r/ClaudeCode en produisait plus que les sources officielles. Claude
+# garde un bonus, et la portée se juge pareil pour tous les labos.
+_GRILLE = """\
+Le score va de 0 à 1 et mesure l'intérêt POUR CE PROFIL, qui veut suivre tout le spectre
+de l'IA. Mélange pondéré de :
+- portée : est-ce que cela change ce qu'on peut faire avec l'IA, ou la façon d'en faire ?
+  Un nouveau modèle de pointe, un saut de capacité, des poids ouverts d'envergure, une
+  percée de recherche, en vidéo ou en robotique valent autant d'où qu'ils viennent —
+  OpenAI, Google, un labo chinois ou Anthropic.
+- proximité : Claude et Claude Code ont un bonus d'environ 0,10 — c'est l'outil du
+  quotidien. Un bonus, pas un plancher : une fonctionnalité mineure de Claude Code reste
+  « utile », pas « à ne pas rater ».
 - nouveauté : information neuve, ou Nième reprise d'une annonce déjà relayée ?
-- importance pour ce profil : est-ce que cela change sa façon de travailler ? Tout ce
-  qui concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum. Ce
-  plancher vaut pour ce qui RENSEIGNE sur Claude — fonctionnalité, comportement, façon
-  de s'en servir —, pas pour une vitrine « j'ai fait un jeu avec Claude » ni une simple
-  réaction à une sortie, qui se notent comme n'importe quel fil d'utilisateur.
 - rigueur : éléments concrets et vérifiables, ou communication sans contenu ?
 - fraîcheur : une annonce du jour prime sur le rappel d'un fait ancien.
 
-Repères : 0,85 et plus = à ne pas rater. 0,50 à 0,84 = utile mais dispensable.
-Sous 0,50 = bruit. Un titre d'utilisateur invérifiable ne dépasse pas 0,60 — sauf un post
-X d'un membre d'Anthropic sur ses propres produits : il parle de ce qu'il construit, il
-se note comme une annonce, et un post d'humeur sans contenu reste du bruit.
-Note tous les éléments, n'invente aucun numéro au-delà du dernier fourni, et n'écris
-rien après le tableau."""
+Repères : 0,85 et plus = à ne pas rater, quel que soit le labo — rarement plus d'une
+douzaine par jour. 0,50 à 0,84 = utile. 0,20 à 0,49 = marginal. Sous 0,20 = hors sujet
+(cuisine, sport, jeux vidéo, politique, vie quotidienne).
+Un titre d'utilisateur (Reddit, Hacker News, X) ne dépasse pas 0,60 — sauf le post d'un
+membre d'un labo sur ses propres produits, qui se note comme une annonce. Une vitrine
+« j'ai fait X avec tel modèle », une réaction à une sortie ou un post d'humeur restent
+du bruit ou du marginal."""
 
 # La synthèse hebdo se lit dans un navigateur, pas dans un terminal : la forme compte
 # autant que le fond. L'ancienne version produisait quatre paragraphes de 145 mots en
@@ -186,18 +203,9 @@ def _formater_items(items: list[dict], limite: int | None = None) -> str:
 
 
 _CONSIGNES_TRI = """\
-Note chaque élément fourni de 0 à 1 selon son intérêt POUR CE PROFIL — pas selon son
-importance générale. Mélange pondéré de :
-- importance pour ce profil : est-ce que cela change sa façon de travailler ? Tout ce qui
-  concerne Claude, Claude Code, Anthropic ou MCP part de 0,80 au minimum — s'il renseigne
-  sur Claude ; une vitrine « j'ai fait X avec Claude » ou une réaction à une sortie se
-  note comme n'importe quel fil d'utilisateur.
-- nouveauté : information neuve, ou reprise d'une annonce déjà relayée ?
-- rigueur : ressource concrète et exploitable, ou simple opinion ?
+Note chaque élément fourni de 0 à 1.
 
-Repères : 0,85 et plus = à ne pas rater. 0,50 à 0,84 = utile. 0,20 à 0,49 = marginal.
-Sous 0,20 = hors sujet pour ce profil (cuisine, sport, jeux vidéo, politique, religion,
-vie quotidienne — quel que soit l'intérêt qu'y trouve la personne par ailleurs).
+{GRILLE}
 
 Réponds UNIQUEMENT par un tableau JSON compact, sans phrase avant ni après :
 [{"i":0,"s":0.92},{"i":1,"s":0.05}]
@@ -238,10 +246,11 @@ Règles :
 
 
 _CONSIGNES = {
-    "quotidien": _CONSIGNES_QUOTIDIEN + _CONSIGNES_SCORES,
+    # {GRILLE} : la même grille de notation pour le digest et pour la passe de tri.
+    "quotidien": _CONSIGNES_QUOTIDIEN + _CONSIGNES_SCORES.replace("{GRILLE}", _GRILLE),
     # Pas de bloc de scores ici : le tri a déjà eu lieu, en amont et sur tous les items.
     "signets": _CONSIGNES_SIGNETS,
-    "tri": _CONSIGNES_TRI,
+    "tri": _CONSIGNES_TRI.replace("{GRILLE}", _GRILLE),
     # Un seul article, et tout son contenu : le seul mode où le prompt porte sur une
     # ressource lue en entier plutôt que sur une liste de titres.
     "developper": CONSIGNES_DEVELOPPER,

@@ -20,7 +20,7 @@ productive peut ne rien apporter, une source qui publie deux fois en trois semai
 ## Comment il est fait
 
 ```
-~34 sources → collecte (cron) → déduplication → scoring par profil → digest → vault
+~53 sources → collecte (cron) → déduplication → scoring par profil → digest → vault
                                                                         ↓
                                                        page de lecture (statique)
 ```

@@ -109,24 +109,32 @@ def voie(score: float | None) -> str:
 
 # Critère de pertinence injecté dans le prompt de résumé.
 # C'est ici que se fait le filtrage — pas dans la liste de sources.
+#
+# Révisé le 06/10 : la veille doit couvrir TOUT le spectre de l'IA. L'ancien profil
+# donnait à Claude un plancher de 0,80 : sur huit jours, Claude prenait 90 essentiels
+# sur 116, et Qwen, Meta ou Gemini n'en avaient aucun malgré des dizaines d'éléments
+# utiles. Claude garde la tête des sections et un bonus, plus de passe-droit.
 PROFIL = """\
-Développeur français qui utilise l'IA au quotidien dans son travail.
+Développeur français qui utilise l'IA au quotidien et veut suivre TOUT le spectre de
+l'intelligence artificielle, sans angle mort.
 
-Centres d'intérêt par ordre de priorité STRICT — cet ordre gouverne à la fois ce qu'on
-garde et l'ordre dans lequel on le présente :
+Domaines suivis — l'ordre est celui de la présentation, pas un filtre :
 
-1. PRIORITÉ ABSOLUE — Claude et Claude Code (Anthropic) : nouvelles versions, fonctionnalités,
-   changements de comportement, MCP, plugins, hooks, agents, retours d'expérience et
-   techniques d'utilisation. Tout élément de cette catégorie doit être conservé et remonté
-   en tête, même s'il paraît mineur.
-2. Les autres modèles : OpenAI/GPT, Kimi, Qwen, DeepSeek, Gemini, Mistral, Llama.
-   Sorties, capacités réelles, poids ouverts, benchmarks sérieux, comparaisons.
-3. Agentic coding en général : autres outils et agents de code, protocoles, tooling LLM.
-4. Automatisation, scripting, Python et data engineering — dont une migration SAS vers
-   Python en cours.
+1. Claude et Claude Code (Anthropic) — l'outil utilisé chaque jour : versions,
+   fonctionnalités, changements de comportement, MCP, plugins, hooks, agents, techniques
+   d'utilisation.
+2. Les modèles de tous les labos : OpenAI, Google, Meta, xAI, Mistral, Microsoft,
+   et les labos chinois (Qwen, DeepSeek, Kimi, GLM, MiniMax). Sorties, capacités
+   réelles, poids ouverts, benchmarks sérieux, prix et accès.
+3. Agents et outils de code : Codex, Cursor, Copilot, Amp et les autres, protocoles,
+   tooling LLM.
+4. Le reste du spectre : recherche (papiers marquants, nouvelles techniques), image,
+   vidéo, voix et musique, robotique et IA incarnée, puces et infrastructure, IA locale,
+   sécurité et alignement, IA en science et en santé, régulation et industrie quand
+   elles changent la donne.
 
-Peu d'intérêt pour : levées de fonds, nominations, débats réglementaires, spéculation sur
-l'AGI, communiqués d'entreprise sans contenu technique."""
+Peu d'intérêt pour : levées de fonds et nominations de routine, spéculation sur l'AGI,
+communiqués sans contenu, opinions qui n'apportent aucun fait nouveau."""
 
 
 # Depuis le 06/10, le site public embarque ce même profil, et les synthèses hebdo
