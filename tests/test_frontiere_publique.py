@@ -2,8 +2,9 @@
 
 Le site public et le site personnel sortent du même générateur, distingués par un
 seul drapeau (`site._preparer(public=True)`). Sans ce test, une régression y
-publierait les signets, les favoris, les développements, les digests hebdomadaires
-ou le profil personnel — sans que rien ne prévienne, et sur une page en ligne.
+publierait les signets, les favoris ou les développements — sans que rien ne
+prévienne, et sur une page en ligne. (Les digests hebdomadaires et le profil sont
+publiés depuis le 06/10 : ils ne font plus partie de ce qui est protégé.)
 
 Chaque test dit donc ce qui ne doit PAS apparaître, jamais l'inverse.
 """
@@ -16,7 +17,7 @@ from veille import config, site
 PHRASE_SIGNET = "signet-que-personne-ne-doit-voir"
 PHRASE_FAVORI = "favori-que-personne-ne-doit-voir"
 PHRASE_DEV = "developpement-que-personne-ne-doit-voir"
-PHRASE_SEMAINE = "digest-hebdo-que-personne-ne-doit-voir"
+PHRASE_SEMAINE = "digest-hebdo-publie"
 
 
 @pytest.fixture
@@ -65,14 +66,15 @@ def sans_vault(monkeypatch):
     )
 
 
-def test_le_mode_public_retire_signets_favoris_developpements_et_semaines(jours):
+def test_le_mode_public_retire_signets_favoris_et_developpements(jours):
     public = site._preparer(jours, public=True)
 
     urls = [it["url"] for j in public["jours"] for it in j["items"]]
     assert "https://x.test/statut/1" not in urls
     assert public["favoris"] == []
     assert public["developpements"] == {}
-    assert public["semaines"] == []
+    # Publiées depuis le 06/10.
+    assert public["semaines"] and public["semaines"][0]["html"] == PHRASE_SEMAINE
 
 
 def test_le_mode_personnel_les_conserve(jours):
@@ -89,12 +91,11 @@ def test_le_mode_personnel_les_conserve(jours):
     assert perso["semaines"]
 
 
-def test_le_profil_embarque_est_le_profil_public(jours):
-    """Le prompt voyage dans la page publique : ce doit être celui du lectorat."""
+def test_le_profil_embarque_est_le_profil_personnel(jours):
+    """Depuis le 06/10, la page publique embarque le profil personnel."""
     public = site._preparer(jours, public=True)
 
-    assert public["profil"] == config.PROFIL_PUBLIC
-    assert config.PROFIL not in public["profil"]
+    assert public["profil"] == config.PROFIL
     # Le site personnel n'embarque aucun prompt : il n'en a pas besoin.
     assert site._preparer(jours, public=False)["profil"] == ""
 
@@ -111,8 +112,6 @@ def test_aucune_phrase_personnelle_dans_la_page_publique(jours, monkeypatch, tmp
     chemin = site.construire(public=True)
     html = chemin.read_text(encoding="utf-8")
 
-    for phrase in (PHRASE_SIGNET, PHRASE_FAVORI, PHRASE_DEV, PHRASE_SEMAINE):
+    for phrase in (PHRASE_SIGNET, PHRASE_FAVORI, PHRASE_DEV):
         assert phrase not in html
-    # Le profil personnel décrit une personne : il ne doit apparaître sous aucune forme.
-    assert "migration SAS" not in html
-    assert config.PROFIL_PUBLIC.splitlines()[0] in html
+    assert PHRASE_SEMAINE in html

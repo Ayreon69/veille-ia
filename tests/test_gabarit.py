@@ -43,16 +43,15 @@ def test_le_theme_choisi_est_pose_avant_la_feuille_de_style():
     assert g.index("veille-theme") < g.index("<style>")
 
 
-def test_les_tendances_sont_aussi_publiees():
-    """Tendances ne lit que les journées de la page : le site public y a droit.
-
-    Le test lit la déclaration des vues publiques dans le script, et vérifie qu'elle
-    ne nomme ni les signets, ni les favoris, ni la semaine.
+def test_les_tendances_et_la_semaine_sont_aussi_publiees():
+    """Tendances ne lit que les journées de la page, et la semaine est publiée depuis
+    le 06/10. Le test lit la déclaration des vues publiques dans le script, et vérifie
+    qu'elle ne nomme ni les signets, ni les favoris.
     """
     g = site.gabarit()
     # « ? {veille:'Veille', …} » : la première ligne après le test du mode public.
     publiques = g.split("const VUES = D.public", 1)[1].split("?", 1)[1].split("\n", 1)[0]
 
-    assert "tendances" in publiques
-    for privee in ("signets", "favoris", "semaine"):
+    assert "tendances" in publiques and "semaine" in publiques
+    for privee in ("signets", "favoris"):
         assert privee not in publiques

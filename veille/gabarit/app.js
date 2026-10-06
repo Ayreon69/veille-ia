@@ -181,9 +181,10 @@
   const SEMAINES = D.semaines || [];
   let semaineActive = 0;
 
-  // Tendances ne lit que ce que la page publique porte déjà : elle y a sa place.
+  // Tendances ne lit que ce que la page publique porte déjà : elle y a sa place. La
+  // semaine aussi, depuis le 06/10 : signets et favoris restent seuls hors ligne.
   const VUES = D.public
-    ? {veille:'Veille', tendances:'Tendances'}
+    ? {veille:'Veille', semaine:'Semaine', tendances:'Tendances'}
     : {veille:'Veille', semaine:'Semaine', tendances:'Tendances', signets:'Signets', favoris:'Favoris'};
   // Les icônes ne s'affichent que dans la barre d'onglets du bas, sur téléphone : à
   // cette largeur, un nom seul se lit mal sous le pouce. Tracés au trait, 24 unités.

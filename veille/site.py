@@ -640,11 +640,14 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
     # grossir la page indéfiniment. Le cache complet reste dans data/, lui.
     atteignables = {it["url"] for j in prepares for it in j["items"]}
     atteignables.update(f.get("url") for f in enregistres)
-    # Rien n'est publié côté public : le développement d'un article de tiers y est
-    # produit à la demande, dans le navigateur du lecteur et avec sa propre clé, puis
-    # gardé chez lui. Le site ne rediffuse donc pas de résumés substitutifs.
-    semaines = [] if public else charger_semaines()
+    # Les synthèses hebdomadaires sont publiées depuis le 06/10 : le site public est
+    # d'abord lu par son auteur, sur téléphone. Elles reprennent les journées déjà en
+    # ligne, orientées par le profil personnel, désormais publié lui aussi.
+    semaines = charger_semaines()
 
+    # Aucun développement n'est publié : celui d'un article de tiers y est produit à la
+    # demande, dans le navigateur du lecteur et avec sa propre clé, puis gardé chez lui.
+    # Le site ne rediffuse donc pas de résumés substitutifs.
     tous_dev = {} if public else developpements.charger()
     dev = {
         url: {"html": markdown_html(d.get("corps", "")), "genere": d.get("genere", "")}
@@ -662,7 +665,7 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
         # Le prompt de développement voyage avec la page publique : le lecteur appelle
         # Gemini lui-même, il faut donc qu'elle sache quoi lui demander. Un prompt n'est
         # pas un secret — la clé, si, et elle ne quitte jamais le navigateur du lecteur.
-        "profil": config.PROFIL_PUBLIC if public else "",
+        "profil": config.PROFIL if public else "",
         "consignes": summarize.CONSIGNES_DEVELOPPER if public else "",
         "modele": config.MODELE_GEMINI if public else "",
         "worker": config.WORKER_LECTURE if public else "",

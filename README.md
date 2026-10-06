@@ -58,12 +58,12 @@ Le même générateur produit deux pages, distinguées par un seul drapeau :
 | Signets X et leurs fiches | oui | **non** |
 | Favoris | oui | **non** |
 | Développements d'articles déjà produits | oui | **non** |
-| Digests hebdomadaires | oui | **non** |
-| Profil dans le prompt embarqué | le vrai | un profil de lectorat, qui ne décrit personne |
+| Digests hebdomadaires (onglet Semaine) | oui | oui, depuis le 06/10 |
+| Profil dans le prompt embarqué | le vrai | le vrai, depuis le 06/10 |
 
 Cette frontière tient à une seule fonction (`site._preparer(public=True)`), donc elle est
 testée : `tests/test_frontiere_publique.py` construit la page publique et vérifie
-qu'aucune donnée personnelle n'y apparaît — y compris en miroir, pour qu'un générateur qui
+qu'aucun signet, favori ni développement n'y apparaît — y compris en miroir, pour qu'un générateur qui
 expurgerait tout ne passe pas le test.
 
 Sur la page publique, développer un article se fait **avec la clé du lecteur** : elle reste

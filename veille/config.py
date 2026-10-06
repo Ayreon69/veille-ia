@@ -37,15 +37,19 @@ BACKEND = os.getenv("VEILLE_BACKEND", "cli").lower()
 MODELE = os.getenv("VEILLE_MODELE", "claude-sonnet-5")
 # Les identifiants de modèles Gemini évoluent vite : garder ce réglage externalisé.
 # `python -m veille.summarize --modeles-gemini` liste ceux que la clé peut appeler.
-MODELE_GEMINI = os.getenv("VEILLE_MODELE_GEMINI", "gemini-3.6-flash")
+# Depuis le 06/10 : l'alias `gemini-flash-latest`, que Google fait pointer sur le Flash
+# courant. Un identifiant figé finit retiré (gemini-2.5-flash, 404 début octobre) ;
+# l'alias suit les générations sans qu'on ait à revenir ici.
+MODELE_GEMINI = os.getenv("VEILLE_MODELE_GEMINI", "gemini-flash-latest")
 # Modèles de repli, essayés dans l'ordre quand le principal reste indisponible après
 # ses tentatives. Un 503 de Gemini est une saturation propre à un modèle, pas une
 # panne de l'API : du 18 au 24/09, cinq exécutions sur neuf ont échoué sur le seul
 # gemini-3.6-flash, et l'hebdo du lundi 21 n'a jamais été écrit. Un modèle d'une
-# génération voisine tourne sur une autre capacité et répond d'ordinaire.
+# génération voisine tourne sur une autre capacité et répond d'ordinaire. Le second
+# repli est l'alias Flash-Lite : plus modeste, mais lui aussi maintenu par Google.
 MODELES_GEMINI_SECOURS = [
     m.strip()
-    for m in os.getenv("VEILLE_MODELES_GEMINI_SECOURS", "gemini-3.5-flash,gemini-2.5-flash").split(",")
+    for m in os.getenv("VEILLE_MODELES_GEMINI_SECOURS", "gemini-3.7-flash,gemini-flash-lite-latest").split(",")
     if m.strip() and m.strip() != MODELE_GEMINI
 ]
 
@@ -125,26 +129,9 @@ Peu d'intérêt pour : levées de fonds, nominations, débats réglementaires, s
 l'AGI, communiqués d'entreprise sans contenu technique."""
 
 
-# Profil du site PUBLIC. Le profil ci-dessus décrit une personne : l'employer pour
-# développer un article à la demande d'un inconnu n'aurait aucun sens, et publierait au
-# passage des détails personnels dans le prompt embarqué dans la page.
-#
-# Celui-ci décrit le lectorat du site, pas son auteur. Il reste orienté — c'est la ligne
-# éditoriale, et elle est annoncée sur la page — mais il ne dit rien de personne.
-PROFIL_PUBLIC = """\
-Développeur qui utilise l'IA au quotidien dans son travail.
-
-Centres d'intérêt, par ordre de priorité :
-
-1. Claude et Claude Code (Anthropic) : versions, fonctionnalités, MCP, plugins, hooks,
-   agents, techniques d'utilisation.
-2. Les autres modèles : OpenAI/GPT, Gemini, Mistral, Llama, Qwen, DeepSeek, Kimi.
-   Sorties, capacités réelles, poids ouverts, benchmarks sérieux.
-3. Agentic coding en général : outils et agents de code, protocoles, tooling LLM.
-4. Automatisation, scripting, Python et data engineering.
-
-Peu d'intérêt pour : levées de fonds, nominations, débats réglementaires, spéculation sur
-l'AGI, communiqués d'entreprise sans contenu technique."""
+# Depuis le 06/10, le site public embarque ce même profil, et les synthèses hebdo
+# qu'il oriente : la page en ligne est d'abord lue par son auteur, depuis son
+# téléphone. Ce texte part donc sur Internet — n'y mettre rien de sensible.
 
 # Adresse du Worker de lecture d'articles, embarquée dans le site public. Vide, le
 # développement se rabat sur le titre et l'extrait — voir Site public.md.
