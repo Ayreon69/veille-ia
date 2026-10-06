@@ -662,6 +662,9 @@ def _preparer(jours: list[dict], public: bool = False) -> dict:
         "developpements": dev,
         "total": total,
         "public": public,
+        # La voix Gemini du point du jour n'est publiée qu'à côté du site public : la
+        # page locale va la chercher là-bas (un <audio> lit une autre origine sans CORS).
+        "voix": "voix/" if public else f"{config.URL_PUBLIQUE}/voix/",
         # Le prompt de développement voyage avec la page publique : le lecteur appelle
         # Gemini lui-même, il faut donc qu'elle sache quoi lui demander. Un prompt n'est
         # pas un secret — la clé, si, et elle ne quitte jamais le navigateur du lecteur.

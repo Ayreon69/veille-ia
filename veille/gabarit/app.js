@@ -344,7 +344,7 @@
     transition('', () => {
       vue = nouvelle;
       curseur = -1;
-      if (VOIX) speechSynthesis.cancel();
+      finLecture();
       // La voie disparaît hors de la veille, et pour la même raison dans les deux
       // cas : un signet comme un favori sont des choix que j'ai faits moi-même, ce
       // n'est pas au score de décider de les masquer. Le sujet, lui, reste utile dans
@@ -623,7 +623,7 @@
     if (date !== null) dernierJour = date;
     curseur = -1;
     dernierLot = null;
-    if (VOIX) speechSynthesis.cancel();
+    finLecture();
     fermerCalendrier();
     // Les nombres des deux rangées de filtres viennent de changer avec la journée.
     rendreVoies(); rendreSujets(); rendre();
@@ -1414,20 +1414,66 @@
     + `<path class="onde" d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8"/><path class="onde" d="M12.7 3.8a6 6 0 0 1 0 8.4"/>`
     + `</svg><span>Écouter</span></button>`;
 
-  function ecouter(bouton){
-    const parle = bouton.getAttribute('aria-pressed') === 'true';
-    speechSynthesis.cancel();
+  // La voix Gemini du point du jour, fabriquée chaque matin par le workflow
+  // (veille/voix.py) et publiée à côté du site public. Elle n'existe que pour le premier
+  // point de la dernière journée : ailleurs, ou si le fichier manque, la voix du système.
+  let lecteur = null;
+
+  // Les voix du système arrivent en différé sur Chrome : demandées au premier clic, la
+  // liste était vide, et la voix par défaut — la plus robotique — prenait la place.
+  let voixSysteme = [];
+  const chargerVoix = () => { if (VOIX) voixSysteme = speechSynthesis.getVoices(); };
+  chargerVoix();
+  if (VOIX) speechSynthesis.addEventListener('voiceschanged', chargerVoix);
+
+  // Les plus naturelles d'abord : les voix « Natural » d'Edge (Denise, Henri…), puis
+  // les voix neuronales ou premium d'Apple et de Google, puis le reste.
+  function meilleureVoix(){
+    const fr = voixSysteme.filter(v => v.lang && v.lang.toLowerCase().startsWith('fr'));
+    const rang = v => /natural|neural/i.test(v.name) ? 0
+      : /premium|enhanced|amélioré|siri/i.test(v.name) ? 1
+      : /google/i.test(v.name) ? 2
+      : v.localService === false ? 3 : 4;
+    return fr.sort((a, b) => rang(a) - rang(b)
+      || (b.lang === 'fr-FR') - (a.lang === 'fr-FR'))[0] || null;
+  }
+
+  function finLecture(){
+    if (lecteur) { lecteur.pause(); lecteur = null; }
+    if (VOIX) speechSynthesis.cancel();
     document.querySelectorAll('.ecouter[aria-pressed="true"]').forEach(b => {
       b.setAttribute('aria-pressed', 'false');
       b.querySelector('span').textContent = 'Écouter';
     });
+  }
+
+  function ecouter(bouton){
+    const parle = bouton.getAttribute('aria-pressed') === 'true';
+    finLecture();
     if (parle) return;
+    bouton.setAttribute('aria-pressed', 'true');
+    bouton.querySelector('span').textContent = 'Arrêter';
+
+    const fichier = D.voix && bouton.dataset.rang === '0' && bouton.dataset.jour === DATES[0]
+      ? `${D.voix}${bouton.dataset.jour}.mp3` : '';
+    if (!fichier) return lireAvecLeSysteme(bouton);
+    const audio = new Audio(fichier);
+    lecteur = audio;
+    audio.addEventListener('ended', () => { if (lecteur === audio) finLecture(); });
+    // Pas encore publiée (le run du matin n'est pas passé) ou hors ligne : la voix du
+    // système prend le relais, sans message d'erreur.
+    const repli = () => { if (lecteur === audio) { lecteur = null; lireAvecLeSysteme(bouton); } };
+    audio.addEventListener('error', repli);
+    audio.play().catch(repli);
+  }
+
+  function lireAvecLeSysteme(bouton){
+    if (!VOIX) return finLecture();
     const bloc = bouton.closest('.digest').querySelector('.retenir');
     // Une phrase par puce, lue avec une pause : lu d'un seul tenant, le texte perdait
     // la frontière entre deux idées. Le gras et le code n'ont pas de voix.
     const phrases = [...bloc.querySelectorAll('li')].map(li => li.textContent.trim()).filter(Boolean);
-    const voix = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('fr'));
-    const choix = voix.find(v => /natural|neural|premium|enhanced/i.test(v.name)) || voix[0] || null;
+    const choix = meilleureVoix();
     (phrases.length ? phrases : [bloc.textContent]).forEach((texte, k, tout) => {
       const u = new SpeechSynthesisUtterance(texte);
       u.lang = 'fr-FR';
@@ -1441,8 +1487,6 @@
       }
       speechSynthesis.speak(u);
     });
-    bouton.setAttribute('aria-pressed', 'true');
-    bouton.querySelector('span').textContent = 'Arrêter';
   }
 
   flux.addEventListener('click', e => {
@@ -1450,7 +1494,7 @@
     if (b) ecouter(b);
   });
   // Une lecture en cours ne survit pas au départ de la page, ni au changement de jour.
-  window.addEventListener('pagehide', () => { if (VOIX) speechSynthesis.cancel(); });
+  window.addEventListener('pagehide', finLecture);
 
   function rendre(){
     // Les deux barres se rafraîchissent avant tout retour anticipé : chacune se masque
@@ -1472,12 +1516,14 @@
       const digests = (vue === 'veille' && filtre === 'tout' && !requete)
         // Le point du jour se lit d'emblée ; le détail, qui répète élément par élément
         // ce que la liste dit maintenant elle-même, se replie.
-        ? j.digests.map(d =>
+        ? j.digests.map((d, rang) =>
             `<div class="digest">`
             // Un seul élément de flex, sinon l'heure passe à la ligne sous le titre :
             // le filet pointillé qui suit prend toute la place restante.
             + `<p class="chapitre"><span><b>Le point</b>${d.heure ? ' de ' + echapper(d.heure) : ''}</span>`
-            + (VOIX && d.retenir ? boutonEcouter : '') + `</p>`
+            + ((VOIX || (D.voix && rang === 0)) && d.retenir
+              ? boutonEcouter.replace('<button ', `<button data-jour="${j.date}" data-rang="${rang}" `)
+              : '') + `</p>`
             + (d.retenir ? `<div class="corps retenir">${d.retenir}</div>` : '')
             + (d.html
               ? `<details class="detail-jour"><summary>Le détail, section par section</summary>`
