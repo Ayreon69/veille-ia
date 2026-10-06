@@ -1737,8 +1737,10 @@
     // Le navigateur ne peut pas lire un site tiers : c'est le Worker qui va chercher le
     // texte. Sans lui, on développe à partir du titre et de l'extrait — le modèle le
     // sait, les consignes lui demandent de le dire plutôt que de broder.
+    // Une vidéo YouTube, Gemini la regarde lui-même : sa page n'a rien à lire.
+    const video = VIDEO_YOUTUBE.test(cible) ? cible : '';
     let contenu = '';
-    if (D.worker) {
+    if (D.worker && !video) {
       panneau.innerHTML = `<p class="attente en-cours">Lecture de l'article…</p>`;
       try {
         const r = await fetch(D.worker + '/?url=' + encodeURIComponent(cible));
@@ -1747,10 +1749,11 @@
       } catch (e) { contenu = ''; }
     }
 
-    panneau.innerHTML = `<p class="attente en-cours">Rédaction par Gemini…</p>`;
+    panneau.innerHTML = `<p class="attente en-cours">`
+      + `${video ? 'Gemini regarde la vidéo…' : 'Rédaction par Gemini…'}</p>`;
     try {
-      const corps = await appelerGemini(cle, promptDeveloppement(item, contenu),
-        etat => { panneau.innerHTML = `<p class="attente en-cours">${etat}</p>`; });
+      const corps = await appelerGemini(cle, promptDeveloppement(item, contenu, video),
+        etat => { panneau.innerHTML = `<p class="attente en-cours">${etat}</p>`; }, video);
       dev[url] = {html: markdownHtml(corps), genere: new Date().toISOString()};
       memoriserDev();
       panneau.innerHTML = rendu(url);
@@ -1760,12 +1763,17 @@
     }
   }
 
-  function promptDeveloppement(item, contenu){
+  const VIDEO_YOUTUBE = /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w-]{6,}/;
+
+  function promptDeveloppement(item, contenu, video){
     const lignes = [`Titre : ${item.titre || ''}`, `Source : ${item.source_nom || ''}`];
     if (item.date) lignes.push(`Date : ${item.date}`);
     lignes.push(`URL : ${item.url || ''}`);
     if (item.extrait) lignes.push(`\nExtrait collecté :\n${item.extrait}`);
-    lignes.push(`\nContenu de la page :\n${contenu || '(non récupéré)'}`);
+    lignes.push(video
+      ? `\nContenu : la vidéo elle-même t'est jointe. Appuie-toi sur ce qui y est dit et `
+        + `montré — démonstrations, commandes, chiffres —, pas sur le seul titre.`
+      : `\nContenu de la page :\n${contenu || '(non récupéré)'}`);
     return `Tu produis une veille IA personnelle pour ce profil :\n\n${D.profil}\n\n`
       + `${D.consignes}\n\nVoici l'article :\n\n` + lignes.join('\n');
   }
@@ -1776,7 +1784,12 @@
   const TRANSITOIRES = new Set([429, 500, 502, 503, 504]);
   const pause = ms => new Promise(r => setTimeout(r, ms));
 
-  async function appelerGemini(cle, prompt, signaler = () => {}){
+  // `video` : une URL YouTube que Gemini regarde, image en basse résolution — c'est la
+  // parole qui compte, et une vidéo de 3 minutes ne coûte alors que ~16 000 tokens.
+  async function appelerGemini(cle, prompt, signaler = () => {}, video = ''){
+    const parties = video ? [{file_data: {file_uri: video}}, {text: prompt}] : [{text: prompt}];
+    const generation = {maxOutputTokens: 12000, temperature: 0.3};
+    if (video) generation.mediaResolution = 'MEDIA_RESOLUTION_LOW';
     const modeles = D.modeles && D.modeles.length ? D.modeles : ['gemini-flash-latest'];
     let derniere = null;
     for (const [rang, modele] of modeles.entries()) {
@@ -1794,8 +1807,8 @@
               method: 'POST',
               headers: {'x-goog-api-key': cle, 'Content-Type': 'application/json'},
               body: JSON.stringify({
-                contents: [{parts: [{text: prompt}]}],
-                generationConfig: {maxOutputTokens: 12000, temperature: 0.3}
+                contents: [{parts: parties}],
+                generationConfig: generation
               })
             }
           );

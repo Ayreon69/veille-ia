@@ -110,7 +110,10 @@ def obtenir(item: dict, refaire: bool = False) -> dict:
         # lié, pas le tweet qui le relaie — dont les 280 caractères n'ont rien à
         # développer.
         cible = (item.get("cible") or "").strip() or url
-        contenu = enrichir.enrichir(cible, limite=LONGUEUR_LECTURE)
+        # Une vidéo YouTube est regardée par le modèle lui-même : sa page n'a rien à lire.
+        contenu = "" if summarize.video_youtube(cible) else enrichir.enrichir(
+            cible, limite=LONGUEUR_LECTURE
+        )
 
         entree = {
             "url": url,

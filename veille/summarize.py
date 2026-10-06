@@ -11,6 +11,7 @@ Le filtrage de la pertinence se fait ici, dans le prompt — pas dans la liste d
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -331,7 +332,7 @@ def _resumer_api(prompt: str) -> str:
 _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
-def _resumer_gemini(prompt: str) -> str:
+def _resumer_gemini(prompt: str, video: str | None = None) -> str:
     """Appelle l'API Gemini en REST direct.
 
     Volontairement sans SDK : httpx est déjà une dépendance du projet, et l'endpoint
@@ -354,7 +355,7 @@ def _resumer_gemini(prompt: str) -> str:
     derniere = None
     for rang, modele in enumerate(modeles):
         try:
-            texte = _appeler_gemini(cle, modele, prompt)
+            texte = _appeler_gemini(cle, modele, prompt, video)
         except _GeminiIndisponible as e:
             derniere = e
             if rang + 1 < len(modeles):
@@ -373,8 +374,18 @@ class _GeminiIndisponible(Exception):
     """Ce modèle-ci n'a pas répondu, mais un autre le pourrait."""
 
 
-def _appeler_gemini(cle: str, modele: str, prompt: str) -> str:
-    """Un appel à un modèle donné, avec ses tentatives sur erreur transitoire."""
+def _appeler_gemini(cle: str, modele: str, prompt: str, video: str | None = None) -> str:
+    """Un appel à un modèle donné, avec ses tentatives sur erreur transitoire.
+
+    `video` : une URL YouTube publique, que Gemini regarde lui-même — la page d'une vidéo
+    ne contient rien de ce qui s'y dit. Image en basse résolution : c'est la parole qui
+    compte, et le coût tombe à ~100 tokens par seconde (16 000 pour 3 minutes).
+    """
+    parties = [{"text": prompt}]
+    generation = {"maxOutputTokens": 12000, "temperature": 0.3}
+    if video:
+        parties.insert(0, {"file_data": {"file_uri": video}})
+        generation["mediaResolution"] = "MEDIA_RESOLUTION_LOW"
     # Gemini renvoie régulièrement des 503 quand le service est chargé. Sans ces
     # tentatives, un aléa passager de quelques secondes fait échouer tout le run
     # et la veille du jour est perdue — constaté dès la première exécution en CI.
@@ -387,12 +398,12 @@ def _appeler_gemini(cle: str, modele: str, prompt: str) -> str:
                 f"{_GEMINI_BASE}/models/{modele}:generateContent",
                 headers={"x-goog-api-key": cle, "Content-Type": "application/json"},
                 json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    # Large : les modèles récents consomment des tokens de réflexion avant
-                    # de produire la réponse, et un plafond trop bas tronque le digest.
-                    # Relevé de 8000 à 12000 depuis l'ajout du bloc de scores, qui ajoute
-                    # jusqu'à 120 entrées JSON après le digest.
-                    "generationConfig": {"maxOutputTokens": 12000, "temperature": 0.3},
+                    "contents": [{"parts": parties}],
+                    # Large (maxOutputTokens 12000) : les modèles récents consomment des
+                    # tokens de réflexion avant de produire la réponse, et un plafond trop
+                    # bas tronque le digest. Relevé de 8000 à 12000 depuis l'ajout du bloc
+                    # de scores, qui ajoute jusqu'à 120 entrées JSON après le digest.
+                    "generationConfig": generation,
                 },
                 timeout=180.0,
             )
@@ -476,14 +487,16 @@ def lister_modeles_gemini() -> list[str]:
     )
 
 
-def _appeler(prompt: str) -> str:
-    """Envoie le prompt au backend configuré."""
+def _appeler(prompt: str, video: str | None = None) -> str:
+    """Envoie le prompt au backend configuré. Seul Gemini sait regarder une vidéo."""
     backends = {"gemini": _resumer_gemini, "api": _resumer_api, "cli": _resumer_cli}
     if config.BACKEND not in backends:
         raise ValueError(
             f"VEILLE_BACKEND inconnu : {config.BACKEND} "
             f"(attendu {', '.join(sorted(backends))})"
         )
+    if video and config.BACKEND == "gemini":
+        return _resumer_gemini(prompt, video)
     return backends[config.BACKEND](prompt)
 
 
@@ -499,6 +512,16 @@ def resumer(items: list[dict], mode: str = "quotidien") -> str:
     return _appeler(construire_prompt(items, mode, limite=len(items)))
 
 
+_YOUTUBE = re.compile(
+    r"^https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]{6,}"
+)
+
+
+def video_youtube(url: str) -> str | None:
+    """L'URL elle-même si c'est une vidéo YouTube, que Gemini sait regarder ; sinon None."""
+    return url if url and _YOUTUBE.match(url) else None
+
+
 def developper(item: dict, contenu: str) -> str:
     """Développe un article : résumé complet et exemple d'usage, en markdown.
 
@@ -512,14 +535,22 @@ def developper(item: dict, contenu: str) -> str:
     lignes.append(f"URL : {item.get('url', '')}")
     if item.get("extrait"):
         lignes.append(f"\nExtrait collecté :\n{item['extrait']}")
-    lignes.append(f"\nContenu de la page :\n{contenu or '(non récupéré)'}")
+    video = video_youtube((item.get("cible") or "").strip() or item.get("url", ""))
+    if video and config.BACKEND == "gemini":
+        lignes.append(
+            "\nContenu : la vidéo elle-même t'est jointe. Appuie-toi sur ce qui y est dit et "
+            "montré — démonstrations, commandes, chiffres —, pas sur le seul titre."
+        )
+    else:
+        video = None
+        lignes.append(f"\nContenu de la page :\n{contenu or '(non récupéré)'}")
 
     prompt = (
         f"Tu produis une veille IA personnelle pour ce profil :\n\n{config.PROFIL}\n\n"
         f"{CONSIGNES_DEVELOPPER}\n\n"
         f"Voici l'article :\n\n" + "\n".join(lignes)
     )
-    return _appeler(prompt).strip()
+    return _appeler(prompt, video).strip()
 
 
 _SENTINELLE = "<<<SCORES>>>"
