@@ -639,7 +639,23 @@ def resumer_et_noter(items: list[dict], mode: str = "quotidien") -> str:
     donc sans requête ni quota supplémentaires.
     """
     digest = resumer(items, mode)
-    return _extraire_scores(digest, items) if items else digest
+    if not items:
+        return digest
+    digest = _extraire_scores(digest, items)
+
+    # Rattrapage : du 28/09 au 04/10, quatre journées sur huit sont restées sans aucune
+    # note — le modèle de repli écrivait le digest mais omettait le bloc de scores, et
+    # rien ne le signalait au-delà d'une ligne de journal. Une passe de tri dédiée, qui
+    # ne demande que des notes, rattrape les manquants. Elle ne fait jamais échouer le
+    # run : au pire, les items restent non notés, comme avant.
+    sans_note = [it for it in items[:MAX_ITEMS] if it.get("score") is None]
+    if sans_note:
+        print(f"  Passe de notation pour {len(sans_note)} items sans note…", flush=True)
+        try:
+            noter(sans_note)
+        except Exception as e:  # noqa: BLE001 — le digest est déjà écrit, rien à perdre
+            print(f"  Passe de notation impossible : {type(e).__name__}: {e}", flush=True)
+    return digest
 
 
 def _charger_items(chemin: str) -> list[dict]:

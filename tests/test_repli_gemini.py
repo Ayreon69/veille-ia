@@ -104,3 +104,35 @@ def test_un_modele_qui_ne_repond_pas_passe_la_main(monkeypatch):
     assert summarize._resumer_gemini("prompt") == "digest du secours"
     # Pas de seconde attente de trois minutes sur le modèle qui ne répond pas.
     assert sum("principal" in u for u in appels) == 1
+
+
+def test_un_digest_sans_bloc_de_scores_declenche_une_passe_de_notation(monkeypatch):
+    """Du 28/09 au 04/10, le modèle de repli omettait le bloc de scores : quatre journées
+    sur huit sont restées sans aucune note. Une passe de tri rattrape les manquants."""
+    reponses = iter([
+        "## À retenir\n- un digest sans bloc de scores",
+        '[{"i":0,"s":0.9},{"i":1,"s":0.2}]',
+    ])
+    monkeypatch.setattr(summarize, "_appeler", lambda prompt, video=None: next(reponses))
+    items = [{"titre": "a", "url": "https://a"}, {"titre": "b", "url": "https://b"}]
+
+    digest = summarize.resumer_et_noter(items)
+
+    assert digest.startswith("## À retenir")
+    assert [it["score"] for it in items] == [0.9, 0.2]
+
+
+def test_la_passe_de_notation_ne_fait_jamais_echouer_le_run(monkeypatch):
+    appels = iter(["## À retenir\n- digest"])
+
+    def appeler(prompt, video=None):
+        try:
+            return next(appels)
+        except StopIteration:
+            raise RuntimeError("Gemini saturé") from None
+
+    monkeypatch.setattr(summarize, "_appeler", appeler)
+    items = [{"titre": "a", "url": "https://a"}]
+
+    assert summarize.resumer_et_noter(items).startswith("## À retenir")
+    assert items[0].get("score") is None
