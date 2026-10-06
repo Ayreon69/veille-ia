@@ -87,3 +87,20 @@ def test_quand_tout_est_indisponible_le_message_nomme_les_modeles(monkeypatch):
     for modele in ("principal", "secours-1", "secours-2"):
         assert modele in str(erreur.value)
     assert "rien n'est perdu" in str(erreur.value)
+
+
+def test_un_modele_qui_ne_repond_pas_passe_la_main(monkeypatch):
+    """Le 06/10, un ReadTimeout remontait tel quel et faisait tomber l'exécution."""
+    appels = []
+
+    def post(url, **_):
+        appels.append(url)
+        if "principal" in url:
+            raise summarize.httpx.ReadTimeout("The read operation timed out")
+        return Reponse(200, "digest du secours")
+
+    monkeypatch.setattr(summarize.httpx, "post", post)
+
+    assert summarize._resumer_gemini("prompt") == "digest du secours"
+    # Pas de seconde attente de trois minutes sur le modèle qui ne répond pas.
+    assert sum("principal" in u for u in appels) == 1

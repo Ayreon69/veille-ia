@@ -382,19 +382,28 @@ def _appeler_gemini(cle: str, modele: str, prompt: str) -> str:
     reponse = None
 
     for tentative in range(4):
-        reponse = httpx.post(
-            f"{_GEMINI_BASE}/models/{modele}:generateContent",
-            headers={"x-goog-api-key": cle, "Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                # Large : les modèles récents consomment des tokens de réflexion avant
-                # de produire la réponse, et un plafond trop bas tronque le digest.
-                # Relevé de 8000 à 12000 depuis l'ajout du bloc de scores, qui ajoute
-                # jusqu'à 120 entrées JSON après le digest.
-                "generationConfig": {"maxOutputTokens": 12000, "temperature": 0.3},
-            },
-            timeout=180.0,
-        )
+        try:
+            reponse = httpx.post(
+                f"{_GEMINI_BASE}/models/{modele}:generateContent",
+                headers={"x-goog-api-key": cle, "Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    # Large : les modèles récents consomment des tokens de réflexion avant
+                    # de produire la réponse, et un plafond trop bas tronque le digest.
+                    # Relevé de 8000 à 12000 depuis l'ajout du bloc de scores, qui ajoute
+                    # jusqu'à 120 entrées JSON après le digest.
+                    "generationConfig": {"maxOutputTokens": 12000, "temperature": 0.3},
+                },
+                timeout=180.0,
+            )
+        except httpx.TransportError as e:
+            # Un modèle qui ne répond pas en trois minutes est saturé, comme un 503 :
+            # on passe au suivant plutôt que de rejouer trois minutes d'attente. Avant
+            # le 06/10, ce cas remontait tel quel et faisait tomber toute l'exécution —
+            # deux fois en une semaine.
+            raise _GeminiIndisponible(
+                f"{modele} sans réponse ({type(e).__name__}) au bout de 180 s."
+            ) from e
 
         if reponse.status_code not in transitoires:
             break
