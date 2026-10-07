@@ -63,3 +63,17 @@ def test_la_grille_n_a_plus_de_plancher_claude():
         consignes = summarize._CONSIGNES[mode]
         assert "0,80 au minimum" not in consignes
         assert "bonus" in consignes and "{GRILLE}" not in consignes
+
+
+def test_un_essentiel_sans_date_ne_casse_pas_le_flux_rss():
+    """Le 07/10, un papier archivé sans date a fait tomber la construction du site public."""
+    from veille import site
+
+    donnees = {"jours": [{"date": "2026-10-07", "items": [
+        {"titre": "Papier", "url": "https://huggingface.co/papers/1", "date": None,
+         "voie": "essentiel", "source_nom": "Hugging Face Papers"},
+    ]}]}
+
+    flux = site.flux_rss(donnees)
+
+    assert "<pubDate>Wed, 07 Oct 2026 00:00:00 +0200</pubDate>" in flux

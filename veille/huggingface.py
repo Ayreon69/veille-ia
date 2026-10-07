@@ -74,9 +74,9 @@ def lire_papiers(source: dict) -> list[dict]:
         items.append({
             "titre": papier.get("title", "").strip(),
             "url": f"https://huggingface.co/papers/{papier['id']}",
-            # Sans date : le papier date de la veille par construction, et la
-            # déduplication garantit qu'il ne remonte qu'une fois.
-            "date": None,
+            # Sa date de présentation sur Hugging Face Papers (la veille). Archivé sans
+            # date, il a fait tomber la construction du site public le 07/10.
+            "date": _date(papier.get("submittedOnDailyAt") or papier.get("publishedAt")),
             "extrait": f"{papier.get('upvotes', 0)} votes sur Hugging Face Papers. {resume}",
         })
     return items

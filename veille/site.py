@@ -875,7 +875,9 @@ def flux_rss(donnees: dict) -> str:
         for it in jour["items"]:
             if it.get("voie") != "essentiel":
                 continue
-            entrees.append(it)
+            # La date du jour sert de repli : un papier Hugging Face archivé sans date
+            # faisait tomber toute la construction du site public le 07/10.
+            entrees.append({**it, "date": it.get("date") or jour.get("date")})
         if len(entrees) >= ITEMS_FLUX:
             break
 
@@ -887,8 +889,12 @@ def flux_rss(donnees: dict) -> str:
         # Les lecteurs RSS trient sur pubDate : une date RFC 822 est attendue, et une
         # date ISO y est diversement interprétée. Elle est reconstruite ici.
         try:
-            quand = datetime.fromisoformat(it["date"]).strftime("%a, %d %b %Y %H:%M:%S %z")
-        except (ValueError, KeyError):
+            date = datetime.fromisoformat(it["date"])
+            # Une date de jour seule n'a pas de fuseau, et RFC 822 en exige un.
+            quand = (date if date.tzinfo else date.replace(tzinfo=config.FUSEAU)).strftime(
+                "%a, %d %b %Y %H:%M:%S %z"
+            )
+        except (ValueError, KeyError, TypeError):
             quand = ""
         articles.append(
             "<item>"
