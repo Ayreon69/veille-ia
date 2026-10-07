@@ -41,3 +41,26 @@ def test_le_pcm_brut_recoit_un_en_tete_wav_et_le_wav_reste_tel_quel():
     with wave.open(io.BytesIO(wav)) as w:
         assert (w.getframerate(), w.getnchannels(), w.getnframes()) == (24000, 1, 2400)
     assert voix._en_wav(wav, "audio/wav") == wav
+
+
+def test_seul_le_texte_du_point_part_au_modele_de_voix(monkeypatch):
+    """Le 07/10, la voix lisait sa propre consigne de ton à voix haute."""
+    monkeypatch.setenv("GEMINI_API_KEY", "cle-de-test")
+    envoye = {}
+
+    class Reponse:
+        status_code = 200
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"inlineData": {
+                "mimeType": "audio/wav", "data": "UklGRgAAAAA="}}]}}]}
+
+    def post(url, json=None, **_):
+        envoye.update(json)
+        return Reponse()
+
+    monkeypatch.setattr(voix.httpx, "post", post)
+    voix.synthetiser("Le point du 7 octobre.")
+
+    assert envoye["contents"][0]["parts"] == [{"text": "Le point du 7 octobre."}]
+    assert "systemInstruction" not in envoye

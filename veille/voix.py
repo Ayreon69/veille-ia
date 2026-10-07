@@ -36,10 +36,10 @@ MODELES = [
     if m.strip()
 ]
 VOIX = os.getenv("VEILLE_VOIX", "Aoede")
-_CONSIGNE = (
-    "Lis ce texte en français, sur le ton posé et chaleureux d'une chronique radio du "
-    "matin, avec une courte pause entre deux idées :\n\n"
-)
+# Aucune consigne de ton : le modèle de voix la LISAIT à voix haute (« Lis ce texte sur
+# le ton d'une chronique radio… », signalé le 07/10), et il refuse les instructions
+# système (« Developer instruction is not enabled »). Le texte seul est lu tel quel —
+# vérifié par transcription — et les sauts de ligne entre puces donnent les pauses.
 _MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
          "septembre", "octobre", "novembre", "décembre"]
 
@@ -95,7 +95,7 @@ def synthetiser(texte: str) -> bytes:
                 f"{_BASE}/models/{modele}:generateContent",
                 headers={"x-goog-api-key": cle},
                 json={
-                    "contents": [{"parts": [{"text": _CONSIGNE + texte}]}],
+                    "contents": [{"parts": [{"text": texte}]}],
                     "generationConfig": {
                         "responseModalities": ["AUDIO"],
                         "speechConfig": {
